@@ -82,6 +82,7 @@ export const App: React.FC = () => {
   // Dynamically switch the Wall TaskBoard & Whiteboard Modal to the clicked agent's GitHub Project Kanban
   useEffect(() => {
     const targetSession = selectedSession || 'aim-office'
+    setBoardLabel(`PROJECT · ${targetSession}`)
     let cancelled = false
     client
       .fetchSessionKanban(targetSession, demoMode || isFallbackActive)
@@ -130,6 +131,7 @@ export const App: React.FC = () => {
         demoMode={demoMode}
         isFallbackActive={isFallbackActive}
         activeThemeId={activeThemeId}
+        boardLabel={boardLabel}
         onSelectTheme={handleSelectTheme}
         onToggleLighting={() => setLightingMode((m) => (m === 'day' ? 'night' : 'day'))}
         onTriggerCourierDemo={() =>

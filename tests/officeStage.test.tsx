@@ -3,7 +3,9 @@ import { render, screen, fireEvent } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import {
   COMMAND_OFFICE_ROOM,
+  CUTAWAY_AGENCY_POD_CENTERS,
   QUAD_POD_CENTERS,
+  WAR_ROOM_POD_CENTERS,
   computeElasticPodCount,
   filterRoomForAgentCount,
   getOfficeThemePack,
@@ -280,5 +282,19 @@ describe('AIM-Office Isometric 2.5D Engine, Elastic 4-Way Quad Pods, Pan/Zoom & 
     )
     const classicBoard = screen.getByTestId('wall-task-board')
     expect(classicBoard.style.transform).toContain('skewY(25.6deg)')
+
+    // Verify War Room v4 pod coordinates keep x=50% central reactor/holo aisle clear (#10)
+    expect(WAR_ROOM_POD_CENTERS).toHaveLength(8)
+    for (const pod of WAR_ROOM_POD_CENTERS) {
+      expect(Math.abs(pod.cx - 50.0)).toBeGreaterThanOrEqual(8.0)
+    }
+
+    // Verify Cutaway Agency v4 pod coordinates populate HQ foyer + all 4 woven rugs across Pods 1..5 (#10)
+    expect(CUTAWAY_AGENCY_POD_CENTERS).toHaveLength(8)
+    expect(CUTAWAY_AGENCY_POD_CENTERS[0]).toMatchObject({ cx: 51.0, cy: 51.5 })
+    expect(CUTAWAY_AGENCY_POD_CENTERS[1]).toMatchObject({ cx: 26.5, cy: 55.0 })
+    expect(CUTAWAY_AGENCY_POD_CENTERS[2]).toMatchObject({ cx: 75.5, cy: 59.5 })
+    expect(CUTAWAY_AGENCY_POD_CENTERS[3]).toMatchObject({ cx: 70.0, cy: 83.5 })
+    expect(CUTAWAY_AGENCY_POD_CENTERS[4]).toMatchObject({ cx: 28.5, cy: 72.0 })
   })
 })
