@@ -34,6 +34,11 @@ export const App: React.FC = () => {
       setIsWhiteboardOpen(true)
       return
     }
+    if (furniture.category === 'entry-door') {
+      const boss = characters.find((c) => c.sessionName === 'aim-joshua') ?? characters[0]
+      if (boss) setSelectedSession(boss.sessionName)
+      return
+    }
     if (furniture.assignedSpotId) {
       const occupant = characters.find((c) => c.deskSpotId === furniture.assignedSpotId)
       if (occupant) {
@@ -56,7 +61,7 @@ export const App: React.FC = () => {
           triggerCourierWalk({
             sender: 'aim-office',
             recipient: 'aim-joshua',
-            preview: '[REPORT from aim-office] Phase 1 Build (#1 -> #2 -> #3) Complete',
+            preview: '[REPORT from aim-office] Issue #4 4-Way Quad Pods & Wall TaskBoard Live',
           })
         }
         onToggleDemoMode={() => setDemoMode((d) => !d)}
@@ -71,6 +76,7 @@ export const App: React.FC = () => {
           selectedSession={selectedSession}
           onSelectCharacter={(char) => setSelectedSession(char.sessionName)}
           onSelectFurniture={handleFurnitureSelect}
+          onOpenWhiteboard={() => setIsWhiteboardOpen(true)}
           onCharactersTick={handleCharactersTick}
         />
 

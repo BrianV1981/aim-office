@@ -7,7 +7,7 @@ import { WhiteboardModal } from '../src/components/WhiteboardModal'
 import { DEMO_FLEET_PANES, DEMO_SWARM_DISPATCHES } from '../src/services/aimConnectClient'
 import { mapFleetToOfficeCharacters } from '../src/office/useOfficeDirector'
 
-describe('AIM-Office HUD Command Bar, Forensic Inspector Drawer & Kanban Modal (#3)', () => {
+describe('AIM-Office HUD Command Bar, Forensic Inspector Drawer & Kanban Modal (#3 & #4)', () => {
   const sampleCharacters = mapFleetToOfficeCharacters(DEMO_FLEET_PANES)
 
   it('renders TopCommandBar with active agent count, 30%-Rule health summary, and interactive toggles', () => {
@@ -91,7 +91,8 @@ describe('AIM-Office HUD Command Bar, Forensic Inspector Drawer & Kanban Modal (
     expect(screen.getByTestId('whiteboard-modal')).toBeInTheDocument()
     expect(screen.getByTestId('kanban-col-done')).toHaveTextContent('#1')
     expect(screen.getByTestId('kanban-col-done')).toHaveTextContent('#2')
-    expect(screen.getByTestId('kanban-col-in-progress')).toHaveTextContent('#3')
+    expect(screen.getByTestId('kanban-col-done')).toHaveTextContent('#3')
+    expect(screen.getByTestId('kanban-col-in-progress')).toHaveTextContent('#4')
     expect(screen.getByTestId('swarm-activity-feed')).toHaveTextContent('aim-joshua')
   })
 })

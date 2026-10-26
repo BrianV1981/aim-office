@@ -50,6 +50,8 @@ export type FurnitureCategory =
   | 'plant'
   | 'server-rack'
 
+export type PodSlotOrientation = 'NW' | 'NE' | 'SW' | 'SE'
+
 export interface FurnitureAsset {
   id: string
   label: string
@@ -59,6 +61,11 @@ export interface FurnitureAsset {
   y: number
   widthPx?: number
   heightPx?: number
+  widthPct?: number
+  heightPct?: number
+  isHotspot?: boolean
+  podIndex?: number
+  podSlot?: PodSlotOrientation
   zIndexOverride?: number
   interactive?: boolean
   state?: 'idle' | 'active' | 'brewing' | 'alert'
@@ -73,6 +80,9 @@ export interface WorkstationSpot {
   x: number
   y: number
   defaultFacing: SpriteFacing
+  zIndexOverride?: number
+  podIndex?: number
+  podSlot?: PodSlotOrientation
   isBossDesk?: boolean
 }
 
@@ -105,6 +115,7 @@ export interface OfficeCharacter {
   position: Point2D
   targetWaypoints: Point2D[]
   facing: SpriteFacing
+  zIndexOverride?: number
   activeToolPill?: string
   speechBubble?: string
   courierTargetSession?: string

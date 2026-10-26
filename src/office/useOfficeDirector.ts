@@ -11,7 +11,7 @@ import { findWaypointPath } from './waypointGraph'
 
 /**
  * Map a session name and vessel badge to its sovereign AIM-Office character archetype:
- * - `aim-joshua` -> `boss-joshua` (Executive Command Desk)
+ * - `aim-joshua` -> `boss-joshua` (Executive Command Desk — Pod 1 NW)
  * - `aim-auditor` / `grok-audit` / `Auditor` -> `vessel-auditor` (The Gatekeeper)
  * - `AGY` -> `vessel-agy`
  * - `Grok` -> `vessel-grok`
@@ -48,7 +48,7 @@ export function resolveSovereignArchetype(
 }
 
 /**
- * Map live or demo `FleetPaneRecord[]` into depth-sorted `OfficeCharacter[]` placed at workstations,
+ * Map live or demo `FleetPaneRecord[]` into depth-sorted `OfficeCharacter[]` placed at 4-way quad pod workstations,
  * preserving active walking coordinates or courier state for already-spawned sessions.
  */
 export function mapFleetToOfficeCharacters(
@@ -105,6 +105,7 @@ export function mapFleetToOfficeCharacters(
       position: isWalking ? prev.position : { x: assignedSpot.x, y: assignedSpot.y },
       targetWaypoints: isWalking ? prev.targetWaypoints : [],
       facing: isWalking ? prev.facing : assignedSpot.defaultFacing,
+      zIndexOverride: assignedSpot.zIndexOverride,
       activeToolPill: pane.preview || undefined,
       speechBubble: isWalking ? prev.speechBubble : undefined,
       courierTargetSession: isWalking ? prev.courierTargetSession : undefined,

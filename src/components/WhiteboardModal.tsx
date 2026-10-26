@@ -36,6 +36,13 @@ export const DEFAULT_PHASE1_KANBAN_TICKETS: KanbanTicketItem[] = [
     id: 'ticket-3',
     number: 3,
     title: 'feat(hud): top command bar, click-to-inspect agent forensic drawer & interactive Kanban whiteboard modal',
+    status: 'Done',
+    assignee: 'aim-office',
+  },
+  {
+    id: 'ticket-4',
+    number: 4,
+    title: 'fix(layout): 1376x768 4-way standing desk quad pods, front/rear agent occlusion, wall hotspots & skewY wall TaskBoard',
     status: 'In Progress',
     assignee: 'aim-office',
   },

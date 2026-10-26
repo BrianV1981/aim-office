@@ -4,14 +4,18 @@ import { FurnitureAsset, IsometricRoom, OfficeCharacter } from '../office/types'
 import { stepAlongWaypoints } from '../office/waypointGraph'
 import { CharacterActor } from './CharacterActor'
 import { FurnitureLayer } from './FurnitureLayer'
+import { WallTaskBoard } from './WallTaskBoard'
+import { KanbanTicketItem } from './WhiteboardModal'
 
 export interface OfficeStageProps {
   room?: IsometricRoom
   characters: OfficeCharacter[]
+  tickets?: KanbanTicketItem[]
   lightingMode?: 'day' | 'night'
   selectedSession?: string | null
   onSelectCharacter?: (character: OfficeCharacter) => void
   onSelectFurniture?: (furniture: FurnitureAsset) => void
+  onOpenWhiteboard?: () => void
   onCharactersTick?: (updated: OfficeCharacter[]) => void
   walkSpeedPctPerSec?: number
 }
@@ -19,10 +23,12 @@ export interface OfficeStageProps {
 export const OfficeStage: React.FC<OfficeStageProps> = ({
   room = COMMAND_OFFICE_ROOM,
   characters,
+  tickets,
   lightingMode = 'day',
   selectedSession = null,
   onSelectCharacter,
   onSelectFurniture,
+  onOpenWhiteboard,
   onCharactersTick,
   walkSpeedPctPerSec = 22,
 }) => {
@@ -85,20 +91,34 @@ export const OfficeStage: React.FC<OfficeStageProps> = ({
     return set
   }, [characters, room.workstations])
 
+  const handleActivateWallBoard = () => {
+    if (onOpenWhiteboard) {
+      onOpenWhiteboard()
+      return
+    }
+    const wbAsset = room.furniture.find((f) => f.category === 'whiteboard')
+    if (wbAsset && onSelectFurniture) {
+      onSelectFurniture(wbAsset)
+    }
+  }
+
   return (
     <div
-      className={`office-stage-viewport lighting-${lightingMode}`}
+      className={`office-stage-viewport office-stage-canvas lighting-${lightingMode}`}
       data-testid="office-stage"
       style={{
         position: 'relative',
         width: '100%',
         maxWidth: `${room.logicalWidth}px`,
         aspectRatio: `${room.logicalWidth} / ${room.logicalHeight}`,
+        backgroundImage: !bgFailed ? `url(${bgUrl})` : undefined,
+        backgroundSize: '100% 100%',
+        backgroundRepeat: 'no-repeat',
         margin: '0 auto',
         overflow: 'hidden',
       }}
     >
-      {/* Layer 1: Isometric Room Shell (PNG background with architectural SVG fallback) */}
+      {/* Layer 1: Isometric Room Shell (1376x768 1:1 uncropped background + SVG fallback) */}
       <div className="office-room-shell" data-testid="office-room-shell">
         {!bgFailed && (
           <img
@@ -110,7 +130,7 @@ export const OfficeStage: React.FC<OfficeStageProps> = ({
               inset: 0,
               width: '100%',
               height: '100%',
-              objectFit: 'cover',
+              objectFit: 'fill',
               imageRendering: 'pixelated',
             }}
             onError={() => setBgFailed(true)}
@@ -118,7 +138,7 @@ export const OfficeStage: React.FC<OfficeStageProps> = ({
           />
         )}
         <svg
-          viewBox="0 0 1200 800"
+          viewBox="0 0 1376 768"
           className="office-isometric-grid-overlay"
           style={{
             position: 'absolute',
@@ -126,7 +146,7 @@ export const OfficeStage: React.FC<OfficeStageProps> = ({
             width: '100%',
             height: '100%',
             pointerEvents: 'none',
-            opacity: bgFailed ? 1 : 0.18,
+            opacity: bgFailed ? 1 : 0,
           }}
           aria-hidden="true"
         >
@@ -144,37 +164,31 @@ export const OfficeStage: React.FC<OfficeStageProps> = ({
               />
             </pattern>
           </defs>
-          <rect width="1200" height="800" fill="url(#isoFloorGrad)" />
+          <rect width="1376" height="768" fill="url(#isoFloorGrad)" />
           <polygon
-            points="600,90 1140,360 600,740 60,360"
+            points="688,318 1052,495 688,676 323,495"
             fill="url(#isoTilePattern)"
             stroke="rgba(56, 189, 248, 0.35)"
-            strokeWidth="2"
-          />
-          {/* Left & Right Isometric Command Walls */}
-          <polygon
-            points="60,360 600,90 600,20 60,290"
-            fill={lightingMode === 'night' ? '#0f172a' : '#1e293b'}
-            stroke="#334155"
-            strokeWidth="2"
-          />
-          <polygon
-            points="600,90 1140,360 1140,290 600,20"
-            fill={lightingMode === 'night' ? '#111827' : '#273549'}
-            stroke="#334155"
             strokeWidth="2"
           />
         </svg>
       </div>
 
-      {/* Layer 2: Depth-Sorted Furniture Sprites */}
+      {/* Layer 1.5: Perspective-Skewed Wall TaskBoard on the painted Whiteboard */}
+      <WallTaskBoard
+        tickets={tickets}
+        lightingMode={lightingMode}
+        onActivate={handleActivateWallBoard}
+      />
+
+      {/* Layer 2: Depth-Sorted 4-Way Standing Desk Quad Pods & Invisible Wall Hotspots */}
       <FurnitureLayer
         items={room.furniture}
         amnesiaDeskIds={amnesiaDeskIds}
         onFurnitureClick={onSelectFurniture}
       />
 
-      {/* Layer 3: Depth-Sorted 4-Direction Isometric Characters */}
+      {/* Layer 3: Depth-Sorted 4-Direction Isometric Characters (with Front/Rear Pod Occlusion) */}
       <div className="office-characters-layer" data-testid="characters-layer">
         {characters.map((character) => (
           <CharacterActor

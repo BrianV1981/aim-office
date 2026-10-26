@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { COMMAND_OFFICE_ROOM } from '../office/rooms'
 import { ArchetypeSlug, AgentOperationalStatus, OfficeCharacter } from '../office/types'
 import { computeDepthZIndex } from '../office/waypointGraph'
 
@@ -51,7 +52,7 @@ const ARCHETYPE_PALETTES: Record<
 }
 
 /**
- * Determine the primary status emoji badge per ticket #1 specification:
+ * Determine the primary status emoji badge:
  * - `⌨️` typing/tool call (`THINKING` or `TOOL_EXEC`)
  * - `✋` waiting on prompt (`WAITING`)
  * - `🔥` >=30% context amnesia alert (`AMNESIA` or `context.pct >= 30`)
@@ -66,28 +67,28 @@ export function resolveOverheadStatusBadge(character: OfficeCharacter): {
   if (character.status === 'COURIER' || character.courierTargetSession) {
     return {
       emoji: '📨',
-      label: character.speechBubble || `Dispatch -> ${character.courierTargetSession ?? 'peer'}`,
+      label: character.speechBubble || `-> ${character.courierTargetSession ?? 'peer'}`,
       tone: 'courier',
     }
   }
   if (character.context.pct >= 30 || character.status === 'AMNESIA') {
     return {
       emoji: '🔥',
-      label: `AMNESIA RISK (${character.context.pct}%)`,
+      label: `${character.context.pct}%`,
       tone: 'danger',
     }
   }
   if (character.status === 'WAITING') {
     return {
       emoji: '✋',
-      label: 'Awaiting Operator',
+      label: 'Wait',
       tone: 'warning',
     }
   }
   if (character.status === 'THINKING' || character.status === 'TOOL_EXEC') {
     return {
       emoji: '⌨️',
-      label: character.activeToolPill || 'Executing',
+      label: character.activeToolPill || 'Working',
       tone: 'info',
     }
   }
@@ -105,24 +106,28 @@ const FallbackPixelAvatar: React.FC<{
   const palette = ARCHETYPE_PALETTES[archetype] ?? ARCHETYPE_PALETTES['vessel-agy']
   return (
     <svg
-      width="44"
-      height="58"
+      width="56"
+      height="86"
       viewBox="0 0 44 58"
       className="fallback-pixel-avatar"
       aria-hidden="true"
+      style={{ height: '100%', width: 'auto', display: 'block' }}
     >
-      {/* Floor shadow */}
       <ellipse cx="22" cy="53" rx="13" ry="4" fill="rgba(0,0,0,0.45)" />
-      {/* Pixel boots */}
       <rect x="14" y="42" width="6" height="9" fill="#0f172a" />
       <rect x="24" y="42" width="6" height="9" fill="#0f172a" />
-      {/* Isometric torso / jacket */}
-      <rect x="11" y="24" width="22" height="19" rx="3" fill={palette.primary} stroke={palette.trim} strokeWidth="2" />
-      {/* Collar / tie detail */}
+      <rect
+        x="11"
+        y="24"
+        width="22"
+        height="19"
+        rx="3"
+        fill={palette.primary}
+        stroke={palette.trim}
+        strokeWidth="2"
+      />
       <rect x="19" y="25" width="6" height="12" fill={palette.trim} />
-      {/* Pixel head */}
       <rect x="12" y="8" width="20" height="16" rx="3" fill="#f8fafc" stroke={palette.trim} strokeWidth="2" />
-      {/* Cybernetic visor / glasses */}
       <rect x="15" y="13" width="14" height="5" rx="1" fill={palette.visor} />
     </svg>
   )
@@ -136,7 +141,6 @@ export const CharacterActor: React.FC<CharacterActorProps> = ({
   const [imgError, setImgError] = useState(false)
   const spriteSrc = `/sprites/characters/${character.archetype}-${character.facing}.png`
 
-  // Reset image error flag if archetype or facing changes
   useEffect(() => {
     setImgError(false)
   }, [spriteSrc])
@@ -144,7 +148,18 @@ export const CharacterActor: React.FC<CharacterActorProps> = ({
   const isWalking = character.targetWaypoints.length > 0
   const isAmnesia = character.context.pct >= 30 || character.status === 'AMNESIA'
   const badge = resolveOverheadStatusBadge(character)
-  const zIndex = computeDepthZIndex(character.position.y) + 2
+
+  // Stationary agents at a 4-way quad pod use their workstation's zIndexOverride
+  // (NW & NE stand behind rear desks at deskZIndex - 5; SW & SE stand in front at deskZIndex + 5).
+  // Walking agents use dynamic depth sorting: computeDepthZIndex(y) + 2.
+  const workstationSpot = COMMAND_OFFICE_ROOM.workstations.find(
+    (w) => w.id === character.deskSpotId
+  )
+  const stationaryZIndex =
+    character.zIndexOverride ??
+    workstationSpot?.zIndexOverride ??
+    computeDepthZIndex(character.position.y) + 2
+  const zIndex = isWalking ? computeDepthZIndex(character.position.y) + 2 : stationaryZIndex
 
   return (
     <div
@@ -159,13 +174,14 @@ export const CharacterActor: React.FC<CharacterActorProps> = ({
         position: 'absolute',
         left: `${character.position.x}%`,
         top: `${character.position.y}%`,
-        transform: 'translate(-50%, -92%)',
+        height: '11.2%',
+        transform: 'translate(-50%, -100%)',
         zIndex,
         cursor: 'pointer',
       }}
       onClick={() => onSelect?.(character)}
     >
-      {/* Overhead Status Pill + Speech Bubble */}
+      {/* Compact Overhead Status Pill */}
       <div
         className={`character-overhead-badge tone-${badge.tone}`}
         data-testid={`badge-${character.sessionName}`}
@@ -185,15 +201,16 @@ export const CharacterActor: React.FC<CharacterActorProps> = ({
         </div>
       )}
 
-      {/* Character Sprite or Isometric Pixel SVG Fallback */}
+      {/* Character Sprite (height: 86px / 11.2% of stage height, bottom-center anchored) */}
       <div className={`character-sprite-frame${isWalking ? ' walk-bob' : ''}`}>
         {!imgError ? (
           <img
             src={spriteSrc}
             alt={`${character.displayName} (${character.facing})`}
-            width={48}
-            height={64}
+            height={86}
             style={{
+              height: '100%',
+              width: 'auto',
               imageRendering: 'pixelated',
               display: 'block',
             }}
@@ -205,7 +222,7 @@ export const CharacterActor: React.FC<CharacterActorProps> = ({
         )}
       </div>
 
-      {/* Footplate with Vessel Badge + 30%-Rule Context Meter */}
+      {/* Compact Footplate with Vessel Chip + 30%-Rule Context Meter */}
       <div className="character-footplate">
         <div className="character-name-row">
           <span className={`vessel-chip vessel-${character.vessel.toLowerCase()}`}>

@@ -1,7 +1,7 @@
 import React from 'react'
 import { render, screen, fireEvent } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
-import { COMMAND_OFFICE_ROOM } from '../src/office/rooms'
+import { COMMAND_OFFICE_ROOM, QUAD_POD_CENTERS } from '../src/office/rooms'
 import {
   computeDepthZIndex,
   findWaypointPath,
@@ -11,13 +11,13 @@ import {
 import { OfficeStage } from '../src/components/OfficeStage'
 import { OfficeCharacter } from '../src/office/types'
 
-describe('AIM-Office Isometric 2.5D Engine & Waypoint Pathfinder (#1)', () => {
-  it('defines the 1200x800 Command Office with Boss Desk, 16 Agent Desks, Whiteboard, Vault, Coffee & Door', () => {
-    expect(COMMAND_OFFICE_ROOM.logicalWidth).toBe(1200)
-    expect(COMMAND_OFFICE_ROOM.logicalHeight).toBe(800)
+describe('AIM-Office Isometric 2.5D Engine, 4-Way Quad Pods & Waypoint Pathfinder (#1 & #4)', () => {
+  it('defines the 1376x768 Command Office with 4 symmetrical 4-Way Standing Desk Quad Pods (16 workstations) and 4 Wall Hotspots', () => {
+    expect(COMMAND_OFFICE_ROOM.logicalWidth).toBe(1376)
+    expect(COMMAND_OFFICE_ROOM.logicalHeight).toBe(768)
+    expect(QUAD_POD_CENTERS).toHaveLength(4)
 
     const furnitureIds = new Set(COMMAND_OFFICE_ROOM.furniture.map((f) => f.id))
-    expect(furnitureIds.has('boss-desk')).toBe(true)
     expect(furnitureIds.has('whiteboard')).toBe(true)
     expect(furnitureIds.has('memory-vault')).toBe(true)
     expect(furnitureIds.has('coffee-station')).toBe(true)
@@ -26,11 +26,29 @@ describe('AIM-Office Isometric 2.5D Engine & Waypoint Pathfinder (#1)', () => {
     for (let i = 1; i <= 16; i++) {
       expect(furnitureIds.has(`desk-${i}`)).toBe(true)
     }
-    // 1 boss spot + 16 workstation spots
-    expect(COMMAND_OFFICE_ROOM.workstations.length).toBe(17)
+    // 16 total standing desk workstations across the 4 Quad Pods (spot-boss is desk-1 NW in Pod 1)
+    expect(COMMAND_OFFICE_ROOM.workstations.length).toBe(16)
+    const bossSpot = COMMAND_OFFICE_ROOM.workstations.find((w) => w.id === 'spot-boss')!
+    expect(bossSpot.deskId).toBe('desk-1')
+    expect(bossSpot.podIndex).toBe(1)
+    expect(bossSpot.podSlot).toBe('NW')
+
+    // Verify front/rear zIndex occlusion in Pod 1: NW & NE agents render behind rear desks (deskZ - 5), SW & SE render in front (deskZ + 5)
+    const desk1 = COMMAND_OFFICE_ROOM.furniture.find((f) => f.id === 'desk-1')!
+    expect(bossSpot.zIndexOverride).toBe((desk1.zIndexOverride ?? 0) - 5)
+
+    const spot3SW = COMMAND_OFFICE_ROOM.workstations.find((w) => w.id === 'spot-3')!
+    const desk3 = COMMAND_OFFICE_ROOM.furniture.find((f) => f.id === 'desk-3')!
+    expect(spot3SW.zIndexOverride).toBe((desk3.zIndexOverride ?? 0) + 5)
+
+    // Verify wall features are marked as invisible hotspots (no floating SVG boxes)
+    for (const wallId of ['entry-door', 'whiteboard', 'coffee-station', 'memory-vault']) {
+      const asset = COMMAND_OFFICE_ROOM.furniture.find((f) => f.id === wallId)!
+      expect(asset.isHotspot).toBe(true)
+    }
   })
 
-  it('routes shortest corridor paths between Door, Cubicles, Boss Desk, Whiteboard, Vault, and Coffee Station via BFS', () => {
+  it('routes shortest corridor paths between Door, Quad Pods, Boss Desk, Whiteboard, Vault, and Coffee Station via BFS', () => {
     const pathDoorToBoss = findWaypointPath('wp-entry-door', 'wp-boss-desk')
     expect(pathDoorToBoss.length).toBeGreaterThan(2)
     expect(pathDoorToBoss[0].id).toBe('wp-entry-door')
@@ -39,8 +57,9 @@ describe('AIM-Office Isometric 2.5D Engine & Waypoint Pathfinder (#1)', () => {
     const pathDeskToCoffee = findWaypointPath('wp-desk-14', 'wp-coffee-station')
     expect(pathDeskToCoffee[0].id).toBe('wp-desk-14')
     expect(pathDeskToCoffee[pathDeskToCoffee.length - 1].id).toBe('wp-coffee-station')
-    // Must route via corridor aisles, not direct teleport
-    expect(pathDeskToCoffee.some((n) => n.id.startsWith('wp-aisle-'))).toBe(true)
+    expect(
+      pathDeskToCoffee.some((n) => n.id.startsWith('wp-aisle-') || n.id === 'wp-south-corridor')
+    ).toBe(true)
   })
 
   it('selects 4-direction isometric sprites and interpolates movement along waypoints', () => {
@@ -65,7 +84,7 @@ describe('AIM-Office Isometric 2.5D Engine & Waypoint Pathfinder (#1)', () => {
     expect(stepped.facing).toBe('rear-right')
   })
 
-  it('renders depth-sorted furniture and characters with overhead status badges (⌨️, ✋, 🔥, 📨, ☕)', () => {
+  it('renders depth-sorted furniture, invisible wall hotspots, skewY WallTaskBoard, and characters with front/rear pod occlusion', () => {
     expect(computeDepthZIndex(48.4)).toBe(484)
     expect(computeDepthZIndex(53.0)).toBe(530)
 
@@ -81,9 +100,9 @@ describe('AIM-Office Isometric 2.5D Engine & Waypoint Pathfinder (#1)', () => {
         context: { pct: 12, severity: 'green' },
         deskSpotId: 'spot-boss',
         currentWaypointId: 'wp-boss-desk',
-        position: { x: 52, y: 27 },
+        position: { x: 45.55, y: 46.35 },
         targetWaypoints: [],
-        facing: 'front-left',
+        facing: 'front-right',
         activeToolPill: '[Bash] ./aim projects board',
       },
       {
@@ -95,11 +114,11 @@ describe('AIM-Office Isometric 2.5D Engine & Waypoint Pathfinder (#1)', () => {
         archetype: 'vessel-grok',
         status: 'AMNESIA',
         context: { pct: 35, severity: 'red' },
-        deskSpotId: 'spot-1',
-        currentWaypointId: 'wp-desk-1',
-        position: { x: 24, y: 40.6 },
+        deskSpotId: 'spot-2',
+        currentWaypointId: 'wp-desk-2',
+        position: { x: 53.45, y: 46.35 },
         targetWaypoints: [],
-        facing: 'front-right',
+        facing: 'front-left',
       },
       {
         id: 'c-3',
@@ -110,11 +129,11 @@ describe('AIM-Office Isometric 2.5D Engine & Waypoint Pathfinder (#1)', () => {
         archetype: 'vessel-auditor',
         status: 'WAITING',
         context: { pct: 21, severity: 'amber' },
-        deskSpotId: 'spot-2',
-        currentWaypointId: 'wp-desk-2',
-        position: { x: 35.5, y: 45.1 },
+        deskSpotId: 'spot-3',
+        currentWaypointId: 'wp-desk-3',
+        position: { x: 45.55, y: 54.85 },
         targetWaypoints: [],
-        facing: 'front-left',
+        facing: 'rear-right',
       },
       {
         id: 'c-4',
@@ -125,11 +144,11 @@ describe('AIM-Office Isometric 2.5D Engine & Waypoint Pathfinder (#1)', () => {
         archetype: 'vessel-opencode',
         status: 'COURIER',
         context: { pct: 10, severity: 'green' },
-        deskSpotId: 'spot-3',
-        currentWaypointId: 'wp-desk-3',
-        position: { x: 47, y: 49.6 },
-        targetWaypoints: [{ x: 52, y: 30 }],
-        facing: 'rear-right',
+        deskSpotId: 'spot-4',
+        currentWaypointId: 'wp-desk-4',
+        position: { x: 53.45, y: 54.85 },
+        targetWaypoints: [{ x: 49.5, y: 43.5 }],
+        facing: 'rear-left',
         courierTargetSession: 'aim-joshua',
         speechBubble: 'Merged #1',
       },
@@ -142,16 +161,23 @@ describe('AIM-Office Isometric 2.5D Engine & Waypoint Pathfinder (#1)', () => {
         archetype: 'vessel-codex',
         status: 'IDLE',
         context: { pct: 8, severity: 'green' },
-        deskSpotId: 'spot-4',
+        deskSpotId: 'spot-5',
         currentWaypointId: 'wp-coffee-station',
-        position: { x: 84, y: 58 },
+        position: { x: 73.5, y: 58 },
         targetWaypoints: [],
         facing: 'front-left',
       },
     ]
 
     const onSelectChar = vi.fn()
-    render(<OfficeStage characters={sampleChars} onSelectCharacter={onSelectChar} />)
+    const onOpenWhiteboard = vi.fn()
+    render(
+      <OfficeStage
+        characters={sampleChars}
+        onSelectCharacter={onSelectChar}
+        onOpenWhiteboard={onOpenWhiteboard}
+      />
+    )
 
     expect(screen.getByTestId('badge-aim-joshua')).toHaveTextContent('⌨️')
     expect(screen.getByTestId('badge-aim-grok')).toHaveTextContent('🔥')
@@ -159,8 +185,27 @@ describe('AIM-Office Isometric 2.5D Engine & Waypoint Pathfinder (#1)', () => {
     expect(screen.getByTestId('badge-aim-opencode')).toHaveTextContent('📨')
     expect(screen.getByTestId('badge-aim-codex')).toHaveTextContent('☕')
 
+    // Stationary NW boss character uses Pod 1 NW zIndexOverride (deskZ 490 - 5 = 485)
     const joshuaActor = screen.getByTestId('character-aim-joshua')
-    expect(Number(joshuaActor.getAttribute('data-zindex'))).toBe(272)
+    expect(Number(joshuaActor.getAttribute('data-zindex'))).toBe(485)
+
+    // Stationary SW character uses Pod 1 SW zIndexOverride (deskZ 541 + 5 = 546)
+    const auditorActor = screen.getByTestId('character-aim-auditor')
+    expect(Number(auditorActor.getAttribute('data-zindex'))).toBe(546)
+
+    // Wall hotspot renders without SVG box
+    const wbHotspot = screen.getByTestId('furniture-whiteboard')
+    expect(wbHotspot.getAttribute('data-hotspot')).toBe('true')
+    expect(wbHotspot.querySelector('svg')).toBeNull()
+
+    // Perspective-skewed WallTaskBoard renders sticky notes and opens WhiteboardModal on click
+    const wallBoard = screen.getByTestId('wall-task-board')
+    expect(wallBoard.style.transform).toContain('skewY(25.6deg)')
+    fireEvent.mouseEnter(screen.getByTestId('wall-note-4'))
+    expect(screen.getByTestId('wall-task-board-tooltip')).toHaveTextContent('#4')
+
+    fireEvent.click(wallBoard)
+    expect(onOpenWhiteboard).toHaveBeenCalledTimes(1)
 
     fireEvent.click(joshuaActor)
     expect(onSelectChar).toHaveBeenCalledWith(sampleChars[0])
