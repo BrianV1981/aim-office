@@ -1,101 +1,99 @@
-import React, { useState } from 'react'
+import React, { useMemo, useState } from 'react'
+import { AgentInspectorDrawer } from './components/AgentInspectorDrawer'
 import { OfficeStage } from './components/OfficeStage'
+import { TopCommandBar } from './components/TopCommandBar'
+import { WhiteboardModal } from './components/WhiteboardModal'
 import { COMMAND_OFFICE_ROOM } from './office/rooms'
+import { FurnitureAsset, OfficeCharacter } from './office/types'
 import { useOfficeDirector } from './office/useOfficeDirector'
 import './styles/office.css'
 
 export const App: React.FC = () => {
   const {
     characters,
+    swarmDispatches,
     demoMode,
     setDemoMode,
     isFallbackActive,
     triggerCourierWalk,
     handleCharactersTick,
+    client,
   } = useOfficeDirector()
 
   const [lightingMode, setLightingMode] = useState<'day' | 'night'>('day')
   const [selectedSession, setSelectedSession] = useState<string | null>(null)
+  const [isWhiteboardOpen, setIsWhiteboardOpen] = useState<boolean>(false)
+
+  const selectedCharacter = useMemo<OfficeCharacter | null>(
+    () => characters.find((c) => c.sessionName === selectedSession) ?? null,
+    [characters, selectedSession]
+  )
+
+  const handleFurnitureSelect = (furniture: FurnitureAsset) => {
+    if (furniture.category === 'whiteboard') {
+      setIsWhiteboardOpen(true)
+      return
+    }
+    if (furniture.assignedSpotId) {
+      const occupant = characters.find((c) => c.deskSpotId === furniture.assignedSpotId)
+      if (occupant) {
+        setSelectedSession(occupant.sessionName)
+      }
+    }
+  }
 
   return (
     <div className="aim-office-app">
-      <header
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '8px 14px',
-          background: 'rgba(15, 23, 42, 0.9)',
-          border: '1px solid rgba(56, 189, 248, 0.3)',
-          borderRadius: '8px',
-        }}
-      >
-        <div>
-          <strong>🏢 {COMMAND_OFFICE_ROOM.name}</strong>
-          <span style={{ marginLeft: 10, fontSize: 12, color: '#94a3b8' }}>
-            {COMMAND_OFFICE_ROOM.subtitle} ({characters.length} Active Vessels ·{' '}
-            {demoMode || isFallbackActive ? 'Demo Fleet Simulation' : 'Live AIM-Connect'})
-          </span>
-        </div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button
-            type="button"
-            onClick={() =>
-              triggerCourierWalk({
-                sender: 'aim-office',
-                recipient: 'aim-joshua',
-                preview: '[REPORT from aim-office] Phase 1 Telemetry Bridge Active',
-              })
-            }
-            style={{
-              background: '#1e293b',
-              color: '#fde68a',
-              border: '1px solid #f59e0b',
-              borderRadius: 6,
-              padding: '4px 10px',
-              cursor: 'pointer',
-            }}
-          >
-            📨 Trigger Courier Walk
-          </button>
-          <button
-            type="button"
-            onClick={() => setDemoMode((d) => !d)}
-            style={{
-              background: '#1e293b',
-              color: '#67e8f9',
-              border: '1px solid #06b6d4',
-              borderRadius: 6,
-              padding: '4px 10px',
-              cursor: 'pointer',
-            }}
-          >
-            {demoMode ? '🔄 Switch to Live' : '🧪 Demo Mode'}
-          </button>
-          <button
-            type="button"
-            onClick={() => setLightingMode((m) => (m === 'day' ? 'night' : 'day'))}
-            style={{
-              background: '#1e293b',
-              color: '#e2e8f0',
-              border: '1px solid #38bdf8',
-              borderRadius: 6,
-              padding: '4px 10px',
-              cursor: 'pointer',
-            }}
-          >
-            {lightingMode === 'day' ? '☀️ Day Shell' : '🌙 Night Shell'}
-          </button>
-        </div>
-      </header>
-
-      <OfficeStage
-        room={COMMAND_OFFICE_ROOM}
+      <TopCommandBar
+        title={COMMAND_OFFICE_ROOM.name}
+        subtitle={COMMAND_OFFICE_ROOM.subtitle}
         characters={characters}
         lightingMode={lightingMode}
-        selectedSession={selectedSession}
-        onSelectCharacter={(char) => setSelectedSession(char.sessionName)}
-        onCharactersTick={handleCharactersTick}
+        demoMode={demoMode}
+        isFallbackActive={isFallbackActive}
+        onToggleLighting={() => setLightingMode((m) => (m === 'day' ? 'night' : 'day'))}
+        onTriggerCourierDemo={() =>
+          triggerCourierWalk({
+            sender: 'aim-office',
+            recipient: 'aim-joshua',
+            preview: '[REPORT from aim-office] Phase 1 Build (#1 -> #2 -> #3) Complete',
+          })
+        }
+        onToggleDemoMode={() => setDemoMode((d) => !d)}
+        onOpenWhiteboard={() => setIsWhiteboardOpen(true)}
+      />
+
+      <div className="office-main-workspace">
+        <OfficeStage
+          room={COMMAND_OFFICE_ROOM}
+          characters={characters}
+          lightingMode={lightingMode}
+          selectedSession={selectedSession}
+          onSelectCharacter={(char) => setSelectedSession(char.sessionName)}
+          onSelectFurniture={handleFurnitureSelect}
+          onCharactersTick={handleCharactersTick}
+        />
+
+        <AgentInspectorDrawer
+          character={selectedCharacter}
+          client={client}
+          demoMode={demoMode || isFallbackActive}
+          onClose={() => setSelectedSession(null)}
+          onDispatchCourierFromAgent={(char) =>
+            triggerCourierWalk({
+              sender: char.sessionName,
+              recipient: 'aim-joshua',
+              preview: `[REPORT from ${char.sessionName}] Status sync -> aim-joshua`,
+            })
+          }
+        />
+      </div>
+
+      <WhiteboardModal
+        isOpen={isWhiteboardOpen}
+        swarmDispatches={swarmDispatches}
+        onClose={() => setIsWhiteboardOpen(false)}
+        onReplayDispatchWalk={(dispatch) => triggerCourierWalk(dispatch)}
       />
     </div>
   )
