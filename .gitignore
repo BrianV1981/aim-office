@@ -1,0 +1,36 @@
+# Node / Vite / Build
+node_modules/
+dist/
+.vite/
+coverage/
+*.log
+
+# Python / Venv
+venv/
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Environment & Secrets
+.env
+.env.*
+!.env.example
+
+# OS / Editor
+.DS_Store
+Thumbs.db
+
+# --- J.O.S.H.U.A. OS Exoskeleton (Local Sovereign State) ---
+joshua_os/
+memory-wiki/
+HANDOFF.md
+AGENTS.md
+TOOLS.md
+aim
+aim.ps1
+aim.cmd
+workspace/
+archive/
+planning-artifacts/
+.gemini/
