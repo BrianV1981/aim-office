@@ -8,10 +8,9 @@ import {
 } from './types'
 
 /**
- * 4 Symmetrical 4-Way Standing Desk Quad Pods (16 Workstations Total)
- * empirically calibrated against `public/rooms/office-day.png` (`1376 x 768`, 16:9)
- * inside the hardwood floor diamond:
- *   Top: (50, 41.5), Left: (23.5, 64.5), Right: (76.5, 64.5), Bottom: (50, 88.0)
+ * Up to 8 Elastic 4-Way Standing Desk Quad Pods (up to 32 Workstations Total)
+ * inside the hardwood floor diamond of `public/rooms/office-day.png` (`1376 x 768`, 16:9).
+ * Pods 1..4 form the primary 16-agent diamond; Pods 5..8 elastically materialize as fleet size grows from 17 to 32.
  */
 export const QUAD_POD_CENTERS: ReadonlyArray<{
   podIndex: number
@@ -47,6 +46,34 @@ export const QUAD_POD_CENTERS: ReadonlyArray<{
     cx: 49.5,
     cy: 76.5,
     aisleWaypointId: 'wp-south-corridor',
+  },
+  {
+    podIndex: 5,
+    name: 'Pod 5 (North-West Expansion Pod)',
+    cx: 41.2,
+    cy: 57.5,
+    aisleWaypointId: 'wp-aisle-1',
+  },
+  {
+    podIndex: 6,
+    name: 'Pod 6 (North-East Expansion Pod)',
+    cx: 57.8,
+    cy: 57.5,
+    aisleWaypointId: 'wp-aisle-2',
+  },
+  {
+    podIndex: 7,
+    name: 'Pod 7 (South-West Expansion Pod)',
+    cx: 41.2,
+    cy: 70.5,
+    aisleWaypointId: 'wp-aisle-3',
+  },
+  {
+    podIndex: 8,
+    name: 'Pod 8 (South-East Expansion Pod)',
+    cx: 57.8,
+    cy: 70.5,
+    aisleWaypointId: 'wp-aisle-4',
   },
 ]
 
@@ -112,7 +139,7 @@ const POD_SLOTS: ReadonlyArray<PodSlotSpec> = [
   },
 ]
 
-function buildQuadPodWorkstations(): {
+export function buildQuadPodWorkstations(maxPods = 8): {
   workstations: WorkstationSpot[]
   deskFurniture: FurnitureAsset[]
   deskWaypoints: WaypointNode[]
@@ -121,8 +148,9 @@ function buildQuadPodWorkstations(): {
   const deskFurniture: FurnitureAsset[] = []
   const deskWaypoints: WaypointNode[] = []
 
+  const clampedPods = Math.max(1, Math.min(QUAD_POD_CENTERS.length, maxPods))
   let deskCounter = 1
-  for (const pod of QUAD_POD_CENTERS) {
+  for (const pod of QUAD_POD_CENTERS.slice(0, clampedPods)) {
     for (const spec of POD_SLOTS) {
       const deskNum = deskCounter++
       const isBossDesk = deskNum === 1
@@ -181,7 +209,6 @@ function buildQuadPodWorkstations(): {
         connections: [pod.aisleWaypointId, 'wp-central-hub'],
       })
 
-      // Also provide `wp-desk-1` alias node for `desk-1` so callers using `wp-desk-1` or `wp-boss-desk` both resolve
       if (isBossDesk) {
         deskWaypoints.push({
           id: 'wp-desk-1',
@@ -197,7 +224,7 @@ function buildQuadPodWorkstations(): {
   return { workstations, deskFurniture, deskWaypoints }
 }
 
-const { workstations, deskFurniture, deskWaypoints } = buildQuadPodWorkstations()
+const { workstations, deskFurniture, deskWaypoints } = buildQuadPodWorkstations(8)
 
 const CORE_WAYPOINTS: WaypointNode[] = [
   {
@@ -246,6 +273,10 @@ const CORE_WAYPOINTS: WaypointNode[] = [
       'wp-desk-6',
       'wp-desk-7',
       'wp-desk-8',
+      'wp-desk-17',
+      'wp-desk-18',
+      'wp-desk-19',
+      'wp-desk-20',
     ],
   },
   {
@@ -264,6 +295,10 @@ const CORE_WAYPOINTS: WaypointNode[] = [
       'wp-desk-10',
       'wp-desk-11',
       'wp-desk-12',
+      'wp-desk-21',
+      'wp-desk-22',
+      'wp-desk-23',
+      'wp-desk-24',
     ],
   },
   {
@@ -307,14 +342,31 @@ const CORE_WAYPOINTS: WaypointNode[] = [
     label: 'South-West Quad Aisle',
     x: 42.0,
     y: 70.2,
-    connections: ['wp-aisle-1', 'wp-central-hub', 'wp-south-corridor'],
+    connections: [
+      'wp-aisle-1',
+      'wp-central-hub',
+      'wp-south-corridor',
+      'wp-desk-25',
+      'wp-desk-26',
+      'wp-desk-27',
+      'wp-desk-28',
+    ],
   },
   {
     id: 'wp-aisle-4',
     label: 'South-East Quad Aisle',
     x: 57.0,
     y: 70.2,
-    connections: ['wp-aisle-2', 'wp-central-hub', 'wp-memory-vault', 'wp-south-corridor'],
+    connections: [
+      'wp-aisle-2',
+      'wp-central-hub',
+      'wp-memory-vault',
+      'wp-south-corridor',
+      'wp-desk-29',
+      'wp-desk-30',
+      'wp-desk-31',
+      'wp-desk-32',
+    ],
   },
   {
     id: 'wp-south-corridor',
@@ -333,10 +385,6 @@ const CORE_WAYPOINTS: WaypointNode[] = [
   },
 ]
 
-/**
- * Wall Hotspots — baked directly into `office-day.png` and `office-night.png`.
- * Rendered as invisible interactive hitboxes (`isHotspot: true`) with subtle hover glow & tooltips.
- */
 const WALL_HOTSPOT_FURNITURE: FurnitureAsset[] = [
   {
     id: 'entry-door',
@@ -395,6 +443,34 @@ const WALL_HOTSPOT_FURNITURE: FurnitureAsset[] = [
     state: 'active',
   },
 ]
+
+/**
+ * Compute how many 4-Way Quad Pods (4..8 pods = 16..32 workstations) are needed
+ * for a given active agent count so the floor scales elastically without overcrowding.
+ */
+export function computeElasticPodCount(agentCount: number): number {
+  if (agentCount <= 16) return 4
+  return Math.min(8, Math.ceil(agentCount / 4))
+}
+
+/**
+ * Filter a room's furniture and workstations to only the active elastic pods (4..8).
+ */
+export function filterRoomForAgentCount(
+  room: IsometricRoom,
+  agentCount: number
+): IsometricRoom {
+  const activePods = computeElasticPodCount(agentCount)
+  return {
+    ...room,
+    furniture: room.furniture.filter(
+      (f) => f.isHotspot || !f.podIndex || f.podIndex <= activePods
+    ),
+    workstations: room.workstations.filter(
+      (w) => !w.podIndex || w.podIndex <= activePods
+    ),
+  }
+}
 
 export const COMMAND_OFFICE_ROOM: IsometricRoom = {
   id: 'aim-command-office',

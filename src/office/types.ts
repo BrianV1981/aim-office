@@ -2,13 +2,30 @@ export type SpriteFacing = 'front-left' | 'front-right' | 'rear-left' | 'rear-ri
 
 export type VesselType = 'AGY' | 'Grok' | 'OpenCode' | 'Codex' | 'Auditor' | 'Shell'
 
-export type ArchetypeSlug =
-  | 'boss-joshua'
-  | 'vessel-agy'
-  | 'vessel-grok'
-  | 'vessel-opencode'
-  | 'vessel-codex'
-  | 'vessel-auditor'
+export const SOVEREIGN_CHARACTER_ROSTER = [
+  'boss-joshua',
+  'vessel-agy',
+  'vessel-grok',
+  'vessel-auditor',
+  'vessel-opencode',
+  'vessel-codex',
+  'agent-leaddeeds',
+  'agent-ld-content',
+  'agent-tbsoftwash',
+  'agent-tb-content',
+  'agent-ai-book',
+  'agent-skorbane',
+  'agent-skorbane-media',
+  'agent-youtube',
+  'agent-gbp',
+  'agent-calendar',
+  'agent-ayrianna',
+  'agent-cron',
+  'agent-tmux',
+  'agent-connect',
+] as const
+
+export type ArchetypeSlug = (typeof SOVEREIGN_CHARACTER_ROSTER)[number]
 
 export type AgentOperationalStatus =
   | 'THINKING'
@@ -121,4 +138,5 @@ export interface OfficeCharacter {
   courierTargetSession?: string
   gitBranch?: string
   worktreePath?: string
+  projectNumber?: number
 }

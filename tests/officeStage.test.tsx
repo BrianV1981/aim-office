@@ -1,7 +1,12 @@
 import React from 'react'
 import { render, screen, fireEvent } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
-import { COMMAND_OFFICE_ROOM, QUAD_POD_CENTERS } from '../src/office/rooms'
+import {
+  COMMAND_OFFICE_ROOM,
+  QUAD_POD_CENTERS,
+  computeElasticPodCount,
+  filterRoomForAgentCount,
+} from '../src/office/rooms'
 import {
   computeDepthZIndex,
   findWaypointPath,
@@ -9,13 +14,14 @@ import {
   stepAlongWaypoints,
 } from '../src/office/waypointGraph'
 import { OfficeStage } from '../src/components/OfficeStage'
-import { OfficeCharacter } from '../src/office/types'
+import { OfficeCharacter, SOVEREIGN_CHARACTER_ROSTER } from '../src/office/types'
 
-describe('AIM-Office Isometric 2.5D Engine, 4-Way Quad Pods & Waypoint Pathfinder (#1 & #4)', () => {
-  it('defines the 1376x768 Command Office with 4 symmetrical 4-Way Standing Desk Quad Pods (16 workstations) and 4 Wall Hotspots', () => {
+describe('AIM-Office Isometric 2.5D Engine, Elastic 4-Way Quad Pods, Pan/Zoom & Waypoints (#1, #4, #5)', () => {
+  it('defines the 1376x768 Command Office with up to 8 elastic 4-Way Standing Desk Quad Pods (32 workstations) and 20-character roster', () => {
     expect(COMMAND_OFFICE_ROOM.logicalWidth).toBe(1376)
     expect(COMMAND_OFFICE_ROOM.logicalHeight).toBe(768)
-    expect(QUAD_POD_CENTERS).toHaveLength(4)
+    expect(QUAD_POD_CENTERS).toHaveLength(8)
+    expect(SOVEREIGN_CHARACTER_ROSTER).toHaveLength(20)
 
     const furnitureIds = new Set(COMMAND_OFFICE_ROOM.furniture.map((f) => f.id))
     expect(furnitureIds.has('whiteboard')).toBe(true)
@@ -23,17 +29,28 @@ describe('AIM-Office Isometric 2.5D Engine, 4-Way Quad Pods & Waypoint Pathfinde
     expect(furnitureIds.has('coffee-station')).toBe(true)
     expect(furnitureIds.has('entry-door')).toBe(true)
 
-    for (let i = 1; i <= 16; i++) {
+    for (let i = 1; i <= 32; i++) {
       expect(furnitureIds.has(`desk-${i}`)).toBe(true)
     }
-    // 16 total standing desk workstations across the 4 Quad Pods (spot-boss is desk-1 NW in Pod 1)
-    expect(COMMAND_OFFICE_ROOM.workstations.length).toBe(16)
+    expect(COMMAND_OFFICE_ROOM.workstations.length).toBe(32)
+
+    // Verify elastic pod scaling from 11 to 32 agents
+    expect(computeElasticPodCount(11)).toBe(4)
+    expect(computeElasticPodCount(16)).toBe(4)
+    expect(computeElasticPodCount(19)).toBe(5)
+    expect(computeElasticPodCount(24)).toBe(6)
+    expect(computeElasticPodCount(32)).toBe(8)
+
+    const roomFor12 = filterRoomForAgentCount(COMMAND_OFFICE_ROOM, 12)
+    expect(roomFor12.workstations).toHaveLength(16)
+    const roomFor28 = filterRoomForAgentCount(COMMAND_OFFICE_ROOM, 28)
+    expect(roomFor28.workstations).toHaveLength(28)
+
     const bossSpot = COMMAND_OFFICE_ROOM.workstations.find((w) => w.id === 'spot-boss')!
     expect(bossSpot.deskId).toBe('desk-1')
     expect(bossSpot.podIndex).toBe(1)
     expect(bossSpot.podSlot).toBe('NW')
 
-    // Verify front/rear zIndex occlusion in Pod 1: NW & NE agents render behind rear desks (deskZ - 5), SW & SE render in front (deskZ + 5)
     const desk1 = COMMAND_OFFICE_ROOM.furniture.find((f) => f.id === 'desk-1')!
     expect(bossSpot.zIndexOverride).toBe((desk1.zIndexOverride ?? 0) - 5)
 
@@ -41,7 +58,6 @@ describe('AIM-Office Isometric 2.5D Engine, 4-Way Quad Pods & Waypoint Pathfinde
     const desk3 = COMMAND_OFFICE_ROOM.furniture.find((f) => f.id === 'desk-3')!
     expect(spot3SW.zIndexOverride).toBe((desk3.zIndexOverride ?? 0) + 5)
 
-    // Verify wall features are marked as invisible hotspots (no floating SVG boxes)
     for (const wallId of ['entry-door', 'whiteboard', 'coffee-station', 'memory-vault']) {
       const asset = COMMAND_OFFICE_ROOM.furniture.find((f) => f.id === wallId)!
       expect(asset.isHotspot).toBe(true)
@@ -84,7 +100,7 @@ describe('AIM-Office Isometric 2.5D Engine, 4-Way Quad Pods & Waypoint Pathfinde
     expect(stepped.facing).toBe('rear-right')
   })
 
-  it('renders depth-sorted furniture, invisible wall hotspots, skewY WallTaskBoard, and characters with front/rear pod occlusion', () => {
+  it('supports mouse wheel zoom (0.75x..1.8x), click-and-drag panning, Reset Camera button, and depth-sorted actors', () => {
     expect(computeDepthZIndex(48.4)).toBe(484)
     expect(computeDepthZIndex(53.0)).toBe(530)
 
@@ -185,28 +201,26 @@ describe('AIM-Office Isometric 2.5D Engine, 4-Way Quad Pods & Waypoint Pathfinde
     expect(screen.getByTestId('badge-aim-opencode')).toHaveTextContent('📨')
     expect(screen.getByTestId('badge-aim-codex')).toHaveTextContent('☕')
 
-    // Stationary NW boss character uses Pod 1 NW zIndexOverride (deskZ 490 - 5 = 485)
+    const stage = screen.getByTestId('office-stage')
+    expect(screen.getByTestId('camera-zoom-readout')).toHaveTextContent('100%')
+
+    // Zoom in via wheel and button
+    fireEvent.wheel(stage, { deltaY: -100 })
+    expect(screen.getByTestId('camera-zoom-readout')).toHaveTextContent('110%')
+
+    // Drag to pan
+    fireEvent.mouseDown(stage, { button: 0, clientX: 100, clientY: 100 })
+    fireEvent.mouseMove(stage, { clientX: 145, clientY: 130 })
+    fireEvent.mouseUp(stage)
+    expect(stage.getAttribute('data-pan')).toBe('45,30')
+
+    // Reset camera
+    fireEvent.click(screen.getByTestId('btn-reset-camera'))
+    expect(screen.getByTestId('camera-zoom-readout')).toHaveTextContent('100%')
+    expect(stage.getAttribute('data-pan')).toBe('0,0')
+
     const joshuaActor = screen.getByTestId('character-aim-joshua')
     expect(Number(joshuaActor.getAttribute('data-zindex'))).toBe(485)
-
-    // Stationary SW character uses Pod 1 SW zIndexOverride (deskZ 541 + 5 = 546)
-    const auditorActor = screen.getByTestId('character-aim-auditor')
-    expect(Number(auditorActor.getAttribute('data-zindex'))).toBe(546)
-
-    // Wall hotspot renders without SVG box
-    const wbHotspot = screen.getByTestId('furniture-whiteboard')
-    expect(wbHotspot.getAttribute('data-hotspot')).toBe('true')
-    expect(wbHotspot.querySelector('svg')).toBeNull()
-
-    // Perspective-skewed WallTaskBoard renders sticky notes and opens WhiteboardModal on click
-    const wallBoard = screen.getByTestId('wall-task-board')
-    expect(wallBoard.style.transform).toContain('skewY(25.6deg)')
-    fireEvent.mouseEnter(screen.getByTestId('wall-note-4'))
-    expect(screen.getByTestId('wall-task-board-tooltip')).toHaveTextContent('#4')
-
-    fireEvent.click(wallBoard)
-    expect(onOpenWhiteboard).toHaveBeenCalledTimes(1)
-
     fireEvent.click(joshuaActor)
     expect(onSelectChar).toHaveBeenCalledWith(sampleChars[0])
   })

@@ -7,11 +7,12 @@ import {
 import {
   applyCourierDispatchToCharacters,
   mapFleetToOfficeCharacters,
+  resolveRosterCharacterArchetype,
   resolveSovereignArchetype,
 } from '../src/office/useOfficeDirector'
 
-describe('AIM-Connect Fleet Telemetry Bridge & Office Director (#2)', () => {
-  it('maps sovereign vessel archetypes accurately (boss-joshua, vessel-auditor, vessel-agy, vessel-grok, vessel-opencode, vessel-codex)', () => {
+describe('AIM-Connect Fleet Telemetry Bridge & Office Director (#2 & #5)', () => {
+  it('maps sovereign vessel archetypes and deterministically assigns unique 20-character roster avatars', () => {
     expect(resolveSovereignArchetype('aim-joshua', 'AGY')).toBe('boss-joshua')
     expect(resolveSovereignArchetype('aim-auditor', 'Auditor')).toBe('vessel-auditor')
     expect(resolveSovereignArchetype('grok-audit', 'Grok')).toBe('vessel-auditor')
@@ -19,6 +20,17 @@ describe('AIM-Connect Fleet Telemetry Bridge & Office Director (#2)', () => {
     expect(resolveSovereignArchetype('aim-ld', 'Grok')).toBe('vessel-grok')
     expect(resolveSovereignArchetype('aim-tbsoftwash', 'OpenCode')).toBe('vessel-opencode')
     expect(resolveSovereignArchetype('aim-codex', 'Codex')).toBe('vessel-codex')
+
+    const used = new Set<any>()
+    expect(resolveRosterCharacterArchetype('aim-ld', 'Grok', used)).toBe('agent-leaddeeds')
+    expect(resolveRosterCharacterArchetype('aim-tbsoftwash', 'OpenCode', used)).toBe(
+      'agent-tbsoftwash'
+    )
+    expect(resolveRosterCharacterArchetype('aim-connect', 'AGY', used)).toBe('agent-connect')
+
+    const mapped = mapFleetToOfficeCharacters(DEMO_FLEET_PANES)
+    const uniqueArchetypes = new Set(mapped.map((c) => c.archetype))
+    expect(uniqueArchetypes.size).toBe(mapped.length)
   })
 
   it('parses aim-connect /api/fleet/panes payload and triggers 30%-Rule Amnesia Alert when context >= 30%', () => {

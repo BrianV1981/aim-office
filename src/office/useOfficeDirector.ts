@@ -6,13 +6,19 @@ import {
   SwarmDispatchEvent,
 } from '../services/aimConnectClient'
 import { COMMAND_OFFICE_ROOM } from './rooms'
-import { ArchetypeSlug, IsometricRoom, OfficeCharacter, VesselType } from './types'
+import {
+  ArchetypeSlug,
+  IsometricRoom,
+  OfficeCharacter,
+  SOVEREIGN_CHARACTER_ROSTER,
+  VesselType,
+} from './types'
 import { findWaypointPath } from './waypointGraph'
 
 /**
- * Map a session name and vessel badge to its sovereign AIM-Office character archetype:
- * - `aim-joshua` -> `boss-joshua` (Executive Command Desk — Pod 1 NW)
- * - `aim-auditor` / `grok-audit` / `Auditor` -> `vessel-auditor` (The Gatekeeper)
+ * Map a session name and vessel badge to its base vessel archetype:
+ * - `aim-joshua` -> `boss-joshua`
+ * - `aim-auditor` / `grok-audit` / `Auditor` -> `vessel-auditor`
  * - `AGY` -> `vessel-agy`
  * - `Grok` -> `vessel-grok`
  * - `OpenCode` -> `vessel-opencode`
@@ -47,8 +53,75 @@ export function resolveSovereignArchetype(
   }
 }
 
+const SESSION_PERSONA_MAP: ReadonlyArray<{ match: string; slug: ArchetypeSlug }> = [
+  { match: 'aim-joshua', slug: 'boss-joshua' },
+  { match: 'aim-auditor', slug: 'vessel-auditor' },
+  { match: 'grok-audit', slug: 'vessel-auditor' },
+  { match: 'aim-ld-content', slug: 'agent-ld-content' },
+  { match: 'aim-ld', slug: 'agent-leaddeeds' },
+  { match: 'aim-tbsoftwash-content', slug: 'agent-tb-content' },
+  { match: 'tbsoftwash-ai-book', slug: 'agent-ai-book' },
+  { match: 'aim-tbsoftwash', slug: 'agent-tbsoftwash' },
+  { match: 'aim-skorbane-content', slug: 'agent-skorbane-media' },
+  { match: 'aim-skorbane', slug: 'agent-skorbane' },
+  { match: 'aim-youtube', slug: 'agent-youtube' },
+  { match: 'aim-gbp', slug: 'agent-gbp' },
+  { match: 'aim-calendar', slug: 'agent-calendar' },
+  { match: 'ayrianna', slug: 'agent-ayrianna' },
+  { match: 'aim-cron', slug: 'agent-cron' },
+  { match: 'aim-tmux', slug: 'agent-tmux' },
+  { match: 'aim-connect', slug: 'agent-connect' },
+  { match: 'aim-opencode', slug: 'vessel-opencode' },
+  { match: 'aim-codex', slug: 'vessel-codex' },
+  { match: 'aim-grok', slug: 'vessel-grok' },
+  { match: 'aim-office', slug: 'vessel-agy' },
+  { match: 'aim-agy', slug: 'vessel-agy' },
+]
+
 /**
- * Map live or demo `FleetPaneRecord[]` into depth-sorted `OfficeCharacter[]` placed at 4-way quad pod workstations,
+ * Deterministically assign a unique avatar from the 20-Character Sovereign Roster (`SOVEREIGN_CHARACTER_ROSTER`)
+ * across active sessions, falling back to deterministic hash selection when all 20 have been used.
+ */
+export function resolveRosterCharacterArchetype(
+  sessionName: string,
+  vessel: VesselType,
+  usedArchetypes?: Set<ArchetypeSlug>
+): ArchetypeSlug {
+  const normalized = sessionName.trim().toLowerCase()
+  for (const entry of SESSION_PERSONA_MAP) {
+    if (normalized === entry.match || normalized.includes(entry.match)) {
+      if (!usedArchetypes || !usedArchetypes.has(entry.slug) || entry.slug === 'boss-joshua') {
+        usedArchetypes?.add(entry.slug)
+        return entry.slug
+      }
+    }
+  }
+
+  const baseArchetype = resolveSovereignArchetype(sessionName, vessel)
+  if (!usedArchetypes || !usedArchetypes.has(baseArchetype)) {
+    usedArchetypes?.add(baseArchetype)
+    return baseArchetype
+  }
+
+  // Pick next unused character from the 20-character roster (excluding boss-joshua)
+  const candidates = SOVEREIGN_CHARACTER_ROSTER.filter((s) => s !== 'boss-joshua')
+  for (const candidate of candidates) {
+    if (!usedArchetypes.has(candidate)) {
+      usedArchetypes.add(candidate)
+      return candidate
+    }
+  }
+
+  // If >20 sessions are active simultaneously, cycle deterministically by session hash
+  let hash = 0
+  for (let i = 0; i < normalized.length; i++) {
+    hash = (hash * 31 + normalized.charCodeAt(i)) >>> 0
+  }
+  return candidates[hash % candidates.length]
+}
+
+/**
+ * Map live or demo `FleetPaneRecord[]` into depth-sorted `OfficeCharacter[]` placed at elastic 4-way quad pod workstations,
  * preserving active walking coordinates or courier state for already-spawned sessions.
  */
 export function mapFleetToOfficeCharacters(
@@ -63,13 +136,21 @@ export function mapFleetToOfficeCharacters(
 
   const bossSpot = room.workstations.find((w) => w.isBossDesk) ?? room.workstations[0]
   const regularSpots = room.workstations.filter((w) => !w.isBossDesk)
+  const usedArchetypes = new Set<ArchetypeSlug>()
 
   let regularSpotCursor = 0
   const result: OfficeCharacter[] = []
 
   for (const pane of panes) {
-    const archetype = resolveSovereignArchetype(pane.sessionName, pane.vessel)
-    const isBoss = archetype === 'boss-joshua'
+    const baseArchetype = resolveSovereignArchetype(pane.sessionName, pane.vessel)
+    const isBoss = baseArchetype === 'boss-joshua'
+    const archetype = isBoss
+      ? 'boss-joshua'
+      : resolveRosterCharacterArchetype(pane.sessionName, pane.vessel, usedArchetypes)
+    if (isBoss) {
+      usedArchetypes.add('boss-joshua')
+    }
+
     const assignedSpot = isBoss
       ? bossSpot
       : regularSpots[regularSpotCursor++ % regularSpots.length] ?? bossSpot

@@ -186,6 +186,46 @@ body {
   filter: saturate(0.92) brightness(0.88);
 }
 
+/* Camera Zoom / Pan Overlay Controls */
+.office-camera-controls {
+  position: absolute;
+  bottom: 12px;
+  right: 14px;
+  z-index: 1200;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  background: rgba(15, 23, 42, 0.92);
+  border: 1px solid rgba(56, 189, 248, 0.45);
+  border-radius: 8px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.65);
+}
+
+.camera-ctrl-btn {
+  background: #1e293b;
+  color: #f8fafc;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  border-radius: 5px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.camera-ctrl-btn:hover {
+  border-color: #38bdf8;
+  background: #334155;
+}
+
+.camera-zoom-readout {
+  font-size: 11px;
+  font-family: monospace;
+  color: #38bdf8;
+  min-width: 38px;
+  text-align: center;
+}
+
 /* Standing Desks (bottom-center leg anchor: translate(-50%, -100%), height: 12% / 92px) */
 .office-furniture-item {
   transform: translate(-50%, -100%);

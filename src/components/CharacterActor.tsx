@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { COMMAND_OFFICE_ROOM } from '../office/rooms'
 import { ArchetypeSlug, AgentOperationalStatus, OfficeCharacter } from '../office/types'
+import { resolveSovereignArchetype } from '../office/useOfficeDirector'
 import { computeDepthZIndex } from '../office/waypointGraph'
 
 export interface CharacterActorProps {
@@ -10,55 +11,31 @@ export interface CharacterActorProps {
 }
 
 const ARCHETYPE_PALETTES: Record<
-  ArchetypeSlug,
+  string,
   { primary: string; trim: string; visor: string; badge: string }
 > = {
-  'boss-joshua': {
-    primary: '#fbbf24',
-    trim: '#1e293b',
-    visor: '#38bdf8',
-    badge: '👑',
-  },
-  'vessel-agy': {
-    primary: '#06b6d4',
-    trim: '#312e81',
-    visor: '#67e8f9',
-    badge: '⚡',
-  },
-  'vessel-grok': {
-    primary: '#e11d48',
-    trim: '#18181b',
-    visor: '#fda4af',
-    badge: '🚀',
-  },
-  'vessel-opencode': {
-    primary: '#10b981',
-    trim: '#064e3b',
-    visor: '#6ee7b7',
-    badge: '🧩',
-  },
-  'vessel-codex': {
-    primary: '#f59e0b',
-    trim: '#451a03',
-    visor: '#fde68a',
-    badge: '📐',
-  },
-  'vessel-auditor': {
-    primary: '#eab308',
-    trim: '#422006',
-    visor: '#fef08a',
-    badge: '🛡️',
-  },
+  'boss-joshua': { primary: '#fbbf24', trim: '#1e293b', visor: '#38bdf8', badge: '👑' },
+  'vessel-agy': { primary: '#06b6d4', trim: '#312e81', visor: '#67e8f9', badge: '⚡' },
+  'vessel-grok': { primary: '#e11d48', trim: '#18181b', visor: '#fda4af', badge: '🚀' },
+  'vessel-opencode': { primary: '#10b981', trim: '#064e3b', visor: '#6ee7b7', badge: '🧩' },
+  'vessel-codex': { primary: '#f59e0b', trim: '#451a03', visor: '#fde68a', badge: '📐' },
+  'vessel-auditor': { primary: '#eab308', trim: '#422006', visor: '#fef08a', badge: '🛡️' },
+  'agent-leaddeeds': { primary: '#2563eb', trim: '#1e3a8a', visor: '#93c5fd', badge: '🏠' },
+  'agent-ld-content': { primary: '#9f1239', trim: '#4c0519', visor: '#fda4af', badge: '✍️' },
+  'agent-tbsoftwash': { primary: '#0d9488', trim: '#134e4a', visor: '#5eead4', badge: '💦' },
+  'agent-tb-content': { primary: '#f97316', trim: '#7c2d12', visor: '#fdba74', badge: '🎬' },
+  'agent-ai-book': { primary: '#15803d', trim: '#14532d', visor: '#86efac', badge: '📚' },
+  'agent-skorbane': { primary: '#7e22ce', trim: '#3b0764', visor: '#d8b4fe', badge: '⚔️' },
+  'agent-skorbane-media': { primary: '#a855f7', trim: '#581c87', visor: '#e9d5ff', badge: '🔮' },
+  'agent-youtube': { primary: '#dc2626', trim: '#7f1d1d', visor: '#fca5a5', badge: '▶️' },
+  'agent-gbp': { primary: '#34d399', trim: '#065f46', visor: '#a7f3d0', badge: '📍' },
+  'agent-calendar': { primary: '#64748b', trim: '#1e293b', visor: '#bae6fd', badge: '⏱️' },
+  'agent-ayrianna': { primary: '#0ea5e9', trim: '#0f172a', visor: '#38bdf8', badge: '🛰️' },
+  'agent-cron': { primary: '#d97706', trim: '#451a03', visor: '#fcd34d', badge: '🤖' },
+  'agent-tmux': { primary: '#475569', trim: '#0f172a', visor: '#94a3b8', badge: '🖥️' },
+  'agent-connect': { primary: '#3b82f6', trim: '#172554', visor: '#bfdbfe', badge: '📡' },
 }
 
-/**
- * Determine the primary status emoji badge:
- * - `⌨️` typing/tool call (`THINKING` or `TOOL_EXEC`)
- * - `✋` waiting on prompt (`WAITING`)
- * - `🔥` >=30% context amnesia alert (`AMNESIA` or `context.pct >= 30`)
- * - `📨` `aim-communicate` courier dispatch (`COURIER` or `courierTargetSession`)
- * - `☕` idle (`IDLE`)
- */
 export function resolveOverheadStatusBadge(character: OfficeCharacter): {
   emoji: string
   label: string
@@ -138,20 +115,19 @@ export const CharacterActor: React.FC<CharacterActorProps> = ({
   isSelected = false,
   onSelect,
 }) => {
-  const [imgError, setImgError] = useState(false)
-  const spriteSrc = `/sprites/characters/${character.archetype}-${character.facing}.png`
+  const [fallbackTier, setFallbackTier] = useState<0 | 1 | 2>(0)
+  const primarySrc = `/sprites/characters/${character.archetype}-${character.facing}.png`
+  const vesselSlug = resolveSovereignArchetype(character.sessionName, character.vessel)
+  const secondarySrc = `/sprites/characters/${vesselSlug}-${character.facing}.png`
 
   useEffect(() => {
-    setImgError(false)
-  }, [spriteSrc])
+    setFallbackTier(0)
+  }, [primarySrc, secondarySrc])
 
   const isWalking = character.targetWaypoints.length > 0
   const isAmnesia = character.context.pct >= 30 || character.status === 'AMNESIA'
   const badge = resolveOverheadStatusBadge(character)
 
-  // Stationary agents at a 4-way quad pod use their workstation's zIndexOverride
-  // (NW & NE stand behind rear desks at deskZIndex - 5; SW & SE stand in front at deskZIndex + 5).
-  // Walking agents use dynamic depth sorting: computeDepthZIndex(y) + 2.
   const workstationSpot = COMMAND_OFFICE_ROOM.workstations.find(
     (w) => w.id === character.deskSpotId
   )
@@ -161,9 +137,12 @@ export const CharacterActor: React.FC<CharacterActorProps> = ({
     computeDepthZIndex(character.position.y) + 2
   const zIndex = isWalking ? computeDepthZIndex(character.position.y) + 2 : stationaryZIndex
 
+  const activeImgSrc = fallbackTier === 0 ? primarySrc : secondarySrc
+
   return (
     <div
       data-testid={`character-${character.sessionName}`}
+      data-archetype={character.archetype}
       data-facing={character.facing}
       data-zindex={zIndex}
       data-status={character.status}
@@ -203,9 +182,9 @@ export const CharacterActor: React.FC<CharacterActorProps> = ({
 
       {/* Character Sprite (height: 86px / 11.2% of stage height, bottom-center anchored) */}
       <div className={`character-sprite-frame${isWalking ? ' walk-bob' : ''}`}>
-        {!imgError ? (
+        {fallbackTier < 2 ? (
           <img
-            src={spriteSrc}
+            src={activeImgSrc}
             alt={`${character.displayName} (${character.facing})`}
             height={86}
             style={{
@@ -214,7 +193,11 @@ export const CharacterActor: React.FC<CharacterActorProps> = ({
               imageRendering: 'pixelated',
               display: 'block',
             }}
-            onError={() => setImgError(true)}
+            onError={() =>
+              setFallbackTier((prev) =>
+                prev === 0 && primarySrc !== secondarySrc ? 1 : 2
+              )
+            }
             draggable={false}
           />
         ) : (
