@@ -6,6 +6,7 @@ import {
   QUAD_POD_CENTERS,
   computeElasticPodCount,
   filterRoomForAgentCount,
+  getOfficeThemePack,
 } from '../src/office/rooms'
 import {
   computeDepthZIndex,
@@ -226,5 +227,58 @@ describe('AIM-Office Isometric 2.5D Engine, Elastic 4-Way Quad Pods, Pan/Zoom & 
     )
     fireEvent.click(joshuaActor)
     expect(onSelectChar).toHaveBeenCalledWith(sampleChars[0])
+  })
+
+  it('omits WallTaskBoard in Sovereign War Room (wallBoardRect: null) while rendering skewDeg 0 in Cutaway Agency and skewDeg 25.6 in Classic Studio (#9)', () => {
+    const warPack = getOfficeThemePack('sovereign-war-room')
+    const agencyPack = getOfficeThemePack('cutaway-agency')
+    const classicPack = getOfficeThemePack('classic-command')
+
+    expect(warPack.wallBoardRect).toBeNull()
+    expect(agencyPack.wallBoardRect?.skewDeg).toBe(0)
+    expect(classicPack.wallBoardRect?.skewDeg).toBe(25.6)
+
+    const onSelectFurniture = vi.fn()
+    const { rerender } = render(
+      <OfficeStage
+        room={warPack.room}
+        wallBoardRect={warPack.wallBoardRect}
+        characters={[]}
+        onSelectFurniture={onSelectFurniture}
+      />
+    )
+
+    // No WallTaskBoard rendered in the subterranean War Room bunker
+    expect(screen.queryByTestId('wall-task-board')).toBeNull()
+
+    // Clicking the Central Holographic Situation Table hotspot triggers whiteboard furniture handler
+    const holoTableHotspot = screen.getByTestId('furniture-whiteboard')
+    expect(holoTableHotspot).toHaveAttribute('data-hotspot', 'true')
+    fireEvent.click(holoTableHotspot)
+    expect(onSelectFurniture).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'whiteboard', category: 'whiteboard' })
+    )
+
+    // Rerender with Cutaway Agency theme -> flat Strategy Wing WallTaskBoard (skewY(0deg))
+    rerender(
+      <OfficeStage
+        room={agencyPack.room}
+        wallBoardRect={agencyPack.wallBoardRect}
+        characters={[]}
+      />
+    )
+    const agencyBoard = screen.getByTestId('wall-task-board')
+    expect(agencyBoard.style.transform).toContain('skewY(0deg)')
+
+    // Rerender with Classic Command theme -> isometric angled WallTaskBoard (skewY(25.6deg))
+    rerender(
+      <OfficeStage
+        room={classicPack.room}
+        wallBoardRect={classicPack.wallBoardRect}
+        characters={[]}
+      />
+    )
+    const classicBoard = screen.getByTestId('wall-task-board')
+    expect(classicBoard.style.transform).toContain('skewY(25.6deg)')
   })
 })

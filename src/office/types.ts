@@ -88,7 +88,7 @@ export interface OfficeThemePack {
   badge: string
   description: string
   room: IsometricRoom
-  wallBoardRect: WallBoardRectConfig
+  wallBoardRect: WallBoardRectConfig | null
 }
 
 export interface FurnitureAsset {

@@ -24,7 +24,7 @@ export interface OfficeStageProps {
   characters: OfficeCharacter[]
   tickets?: KanbanTicketItem[]
   boardLabel?: string
-  wallBoardRect?: WallBoardRectConfig
+  wallBoardRect?: WallBoardRectConfig | null
   lightingMode?: 'day' | 'night'
   selectedSession?: string | null
   onSelectCharacter?: (character: OfficeCharacter) => void
@@ -264,14 +264,16 @@ export const OfficeStage: React.FC<OfficeStageProps> = ({
           </svg>
         </div>
 
-        {/* Layer 1.5: Perspective-Skewed Wall TaskBoard on the painted Whiteboard */}
-        <WallTaskBoard
-          tickets={tickets}
-          boardLabel={boardLabel}
-          rect={wallBoardRect}
-          lightingMode={lightingMode}
-          onActivate={handleActivateWallBoard}
-        />
+        {/* Layer 1.5: Perspective-Skewed Wall TaskBoard (Office & Cutaway Agency themes only; omitted in War Room when wallBoardRect === null) */}
+        {wallBoardRect !== null && (
+          <WallTaskBoard
+            tickets={tickets}
+            boardLabel={boardLabel}
+            rect={wallBoardRect}
+            lightingMode={lightingMode}
+            onActivate={handleActivateWallBoard}
+          />
+        )}
 
         {/* Layer 2: Depth-Sorted Elastic 4-Way Standing Desk Quad Pods & Invisible Wall Hotspots */}
         <FurnitureLayer
