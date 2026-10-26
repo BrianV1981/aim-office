@@ -1,6 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { COMMAND_OFFICE_ROOM, filterRoomForAgentCount } from '../office/rooms'
-import { FurnitureAsset, IsometricRoom, OfficeCharacter } from '../office/types'
+import {
+  FurnitureAsset,
+  IsometricRoom,
+  OfficeCharacter,
+  WallBoardRectConfig,
+} from '../office/types'
 import { stepAlongWaypoints } from '../office/waypointGraph'
 import { CharacterActor } from './CharacterActor'
 import { FurnitureLayer } from './FurnitureLayer'
@@ -19,6 +24,7 @@ export interface OfficeStageProps {
   characters: OfficeCharacter[]
   tickets?: KanbanTicketItem[]
   boardLabel?: string
+  wallBoardRect?: WallBoardRectConfig
   lightingMode?: 'day' | 'night'
   selectedSession?: string | null
   onSelectCharacter?: (character: OfficeCharacter) => void
@@ -33,6 +39,7 @@ export const OfficeStage: React.FC<OfficeStageProps> = ({
   characters,
   tickets,
   boardLabel,
+  wallBoardRect,
   lightingMode = 'day',
   selectedSession = null,
   onSelectCharacter,
@@ -261,6 +268,7 @@ export const OfficeStage: React.FC<OfficeStageProps> = ({
         <WallTaskBoard
           tickets={tickets}
           boardLabel={boardLabel}
+          rect={wallBoardRect}
           lightingMode={lightingMode}
           onActivate={handleActivateWallBoard}
         />

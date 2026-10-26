@@ -1,84 +1,95 @@
 import {
   FurnitureAsset,
   IsometricRoom,
+  OfficeThemePack,
   PodSlotOrientation,
   SpriteFacing,
+  ThemePackId,
+  WallBoardRectConfig,
   WaypointNode,
   WorkstationSpot,
 } from './types'
 
-/**
- * Up to 8 Elastic 4-Way Standing Desk Quad Pods (up to 32 Workstations Total)
- * inside the hardwood floor diamond of `public/rooms/office-day.png` (`1376 x 768`, 16:9).
- * Pods 1..4 form the primary 16-agent diamond; Pods 5..8 elastically materialize as fleet size grows from 17 to 32.
- */
-export const QUAD_POD_CENTERS: ReadonlyArray<{
+export interface PodCenterSpec {
   podIndex: number
   name: string
   cx: number
   cy: number
   aisleWaypointId: string
-}> = [
+  benchAxis?: 'slash' | 'backslash'
+}
+
+/**
+ * Calibrated 3x2 + 2 True Isometric Lattice on the 1376x768 floor diamond.
+ * Every pod is separated by >= 10.5% in X and >= 9.0% in Y along the 2:1 isometric axes
+ * so 4-desk Parallel Quad Benches have wide walking corridors and zero overlap.
+ */
+export const QUAD_POD_CENTERS: ReadonlyArray<PodCenterSpec> = [
   {
     podIndex: 1,
-    name: 'Pod 1 (North Command Pod)',
-    cx: 49.5,
-    cy: 51.5,
+    name: 'Pod 1 (North Command Bridge)',
+    cx: 50.0,
+    cy: 49.5,
     aisleWaypointId: 'wp-north-corridor',
+    benchAxis: 'slash',
   },
   {
     podIndex: 2,
-    name: 'Pod 2 (West Sunlit Pod)',
-    cx: 35.0,
-    cy: 64.0,
+    name: 'Pod 2 (West Sunlit Bay)',
+    cx: 39.0,
+    cy: 59.0,
     aisleWaypointId: 'wp-aisle-1',
+    benchAxis: 'slash',
   },
   {
     podIndex: 3,
-    name: 'Pod 3 (East Telemetry Pod)',
-    cx: 64.0,
-    cy: 64.0,
+    name: 'Pod 3 (East Telemetry Bay)',
+    cx: 61.0,
+    cy: 59.0,
     aisleWaypointId: 'wp-aisle-2',
+    benchAxis: 'slash',
   },
   {
     podIndex: 4,
-    name: 'Pod 4 (South Fleet Pod)',
-    cx: 49.5,
-    cy: 76.5,
-    aisleWaypointId: 'wp-south-corridor',
+    name: 'Pod 4 (Central Operations Bay)',
+    cx: 50.0,
+    cy: 68.5,
+    aisleWaypointId: 'wp-central-hub',
+    benchAxis: 'slash',
   },
   {
     podIndex: 5,
-    name: 'Pod 5 (North-West Expansion Pod)',
-    cx: 41.2,
-    cy: 57.5,
-    aisleWaypointId: 'wp-aisle-1',
+    name: 'Pod 5 (South-West Wing Bay)',
+    cx: 28.5,
+    cy: 68.5,
+    aisleWaypointId: 'wp-aisle-3',
+    benchAxis: 'slash',
   },
   {
     podIndex: 6,
-    name: 'Pod 6 (North-East Expansion Pod)',
-    cx: 57.8,
-    cy: 57.5,
-    aisleWaypointId: 'wp-aisle-2',
+    name: 'Pod 6 (South Promenade Bay)',
+    cx: 39.0,
+    cy: 78.0,
+    aisleWaypointId: 'wp-south-corridor',
+    benchAxis: 'slash',
   },
   {
     podIndex: 7,
-    name: 'Pod 7 (South-West Expansion Pod)',
-    cx: 41.2,
-    cy: 70.5,
-    aisleWaypointId: 'wp-aisle-3',
+    name: 'Pod 7 (South-East Server Bay)',
+    cx: 61.0,
+    cy: 72.5,
+    aisleWaypointId: 'wp-aisle-4',
+    benchAxis: 'slash',
   },
   {
     podIndex: 8,
-    name: 'Pod 8 (South-East Expansion Pod)',
-    cx: 57.8,
-    cy: 70.5,
-    aisleWaypointId: 'wp-aisle-4',
+    name: 'Pod 8 (Deep South Reserve Bay)',
+    cx: 50.0,
+    cy: 81.5,
+    aisleWaypointId: 'wp-south-corridor',
+    benchAxis: 'slash',
   },
 ]
-
-const POD_DX = 2.85
-const POD_DY = 2.55
 
 interface PodSlotSpec {
   slot: PodSlotOrientation
@@ -92,54 +103,113 @@ interface PodSlotSpec {
   agentZDelta: number
 }
 
-const POD_SLOTS: ReadonlyArray<PodSlotSpec> = [
+/**
+ * Parallel 2x2 Isometric Quad Bench ("/" SW-to-NE axis):
+ * - Rear row (`NW` and `NE`): 2 side-by-side `standing-desk-left-rear.png` desks.
+ *   Agents stand BEHIND the desks (`NW` side, `agentZDelta = -5`) facing `front-right` (SE),
+ *   so the desk surface cleanly occludes their lower legs.
+ * - Front row (`SW` and `SE`): 2 side-by-side `standing-desk-left-front.png` desks back-to-back
+ *   against the rear monitors. Agents stand IN FRONT of the keyboards (`SE` side, `agentZDelta = +5`)
+ *   facing `rear-left` (NW).
+ */
+const SLASH_BENCH_SLOTS: ReadonlyArray<PodSlotSpec> = [
   {
     slot: 'NW',
-    offsetX: -POD_DX,
-    offsetY: -POD_DY,
+    offsetX: -2.25,
+    offsetY: -0.15,
     spritePath: '/sprites/furniture/standing-desk-left-rear.png',
-    zOffset: 0,
-    agentOffsetX: -1.1,
-    agentOffsetY: -2.6,
+    zOffset: 1,
+    agentOffsetX: -0.9,
+    agentOffsetY: -2.1,
     defaultFacing: 'front-right',
-    agentZDelta: -5, // Stands BEHIND desk; desk occludes lower legs
+    agentZDelta: -5,
   },
   {
     slot: 'NE',
-    offsetX: POD_DX,
-    offsetY: -POD_DY,
-    spritePath: '/sprites/furniture/standing-desk-right-rear.png',
-    zOffset: 1,
-    agentOffsetX: 1.1,
-    agentOffsetY: -2.6,
-    defaultFacing: 'front-left',
-    agentZDelta: -5, // Stands BEHIND desk; desk occludes lower legs
+    offsetX: 0.25,
+    offsetY: -2.35,
+    spritePath: '/sprites/furniture/standing-desk-left-rear.png',
+    zOffset: 0,
+    agentOffsetX: -0.9,
+    agentOffsetY: -2.1,
+    defaultFacing: 'front-right',
+    agentZDelta: -5,
   },
   {
     slot: 'SW',
-    offsetX: -POD_DX,
-    offsetY: POD_DY,
-    spritePath: '/sprites/furniture/standing-desk-right-front.png',
-    zOffset: 0,
-    agentOffsetX: -1.1,
-    agentOffsetY: 0.8,
-    defaultFacing: 'rear-right',
-    agentZDelta: 5, // Stands IN FRONT of desk facing monitors
+    offsetX: -0.25,
+    offsetY: 2.35,
+    spritePath: '/sprites/furniture/standing-desk-left-front.png',
+    zOffset: 3,
+    agentOffsetX: 0.9,
+    agentOffsetY: 0.7,
+    defaultFacing: 'rear-left',
+    agentZDelta: 5,
   },
   {
     slot: 'SE',
-    offsetX: POD_DX,
-    offsetY: POD_DY,
+    offsetX: 2.25,
+    offsetY: 0.15,
     spritePath: '/sprites/furniture/standing-desk-left-front.png',
-    zOffset: 1,
-    agentOffsetX: 1.1,
-    agentOffsetY: 0.8,
+    zOffset: 2,
+    agentOffsetX: 0.9,
+    agentOffsetY: 0.7,
     defaultFacing: 'rear-left',
-    agentZDelta: 5, // Stands IN FRONT of desk facing monitors
+    agentZDelta: 5,
   },
 ]
 
-export function buildQuadPodWorkstations(maxPods = 8): {
+const BACKSLASH_BENCH_SLOTS: ReadonlyArray<PodSlotSpec> = [
+  {
+    slot: 'NW',
+    offsetX: -0.25,
+    offsetY: -2.35,
+    spritePath: '/sprites/furniture/standing-desk-right-rear.png',
+    zOffset: 0,
+    agentOffsetX: 0.9,
+    agentOffsetY: -2.1,
+    defaultFacing: 'front-left',
+    agentZDelta: -5,
+  },
+  {
+    slot: 'NE',
+    offsetX: 2.25,
+    offsetY: -0.15,
+    spritePath: '/sprites/furniture/standing-desk-right-rear.png',
+    zOffset: 1,
+    agentOffsetX: 0.9,
+    agentOffsetY: -2.1,
+    defaultFacing: 'front-left',
+    agentZDelta: -5,
+  },
+  {
+    slot: 'SW',
+    offsetX: -2.25,
+    offsetY: 0.15,
+    spritePath: '/sprites/furniture/standing-desk-right-front.png',
+    zOffset: 2,
+    agentOffsetX: -0.9,
+    agentOffsetY: 0.7,
+    defaultFacing: 'rear-right',
+    agentZDelta: 5,
+  },
+  {
+    slot: 'SE',
+    offsetX: 0.25,
+    offsetY: 2.35,
+    spritePath: '/sprites/furniture/standing-desk-right-front.png',
+    zOffset: 3,
+    agentOffsetX: -0.9,
+    agentOffsetY: 0.7,
+    defaultFacing: 'rear-right',
+    agentZDelta: 5,
+  },
+]
+
+export function buildQuadPodWorkstations(
+  maxPods = 8,
+  podCenters: ReadonlyArray<PodCenterSpec> = QUAD_POD_CENTERS
+): {
   workstations: WorkstationSpot[]
   deskFurniture: FurnitureAsset[]
   deskWaypoints: WaypointNode[]
@@ -148,10 +218,11 @@ export function buildQuadPodWorkstations(maxPods = 8): {
   const deskFurniture: FurnitureAsset[] = []
   const deskWaypoints: WaypointNode[] = []
 
-  const clampedPods = Math.max(1, Math.min(QUAD_POD_CENTERS.length, maxPods))
+  const clampedPods = Math.max(1, Math.min(podCenters.length, maxPods))
   let deskCounter = 1
-  for (const pod of QUAD_POD_CENTERS.slice(0, clampedPods)) {
-    for (const spec of POD_SLOTS) {
+  for (const pod of podCenters.slice(0, clampedPods)) {
+    const slots = pod.benchAxis === 'backslash' ? BACKSLASH_BENCH_SLOTS : SLASH_BENCH_SLOTS
+    for (const spec of slots) {
       const deskNum = deskCounter++
       const isBossDesk = deskNum === 1
       const deskId = `desk-${deskNum}`
@@ -191,8 +262,8 @@ export function buildQuadPodWorkstations(maxPods = 8): {
         spritePath: spec.spritePath,
         x: deskX,
         y: deskY,
-        widthPx: 92,
-        heightPx: 92,
+        widthPx: 68,
+        heightPx: 68,
         zIndexOverride: deskZIndex,
         podIndex: pod.podIndex,
         podSlot: spec.slot,
@@ -224,8 +295,6 @@ export function buildQuadPodWorkstations(maxPods = 8): {
   return { workstations, deskFurniture, deskWaypoints }
 }
 
-const { workstations, deskFurniture, deskWaypoints } = buildQuadPodWorkstations(8)
-
 const CORE_WAYPOINTS: WaypointNode[] = [
   {
     id: 'wp-entry-door',
@@ -237,8 +306,8 @@ const CORE_WAYPOINTS: WaypointNode[] = [
   {
     id: 'wp-north-corridor',
     label: 'North Command Corridor',
-    x: 49.5,
-    y: 43.5,
+    x: 50.0,
+    y: 44.0,
     connections: [
       'wp-entry-door',
       'wp-aisle-1',
@@ -261,8 +330,8 @@ const CORE_WAYPOINTS: WaypointNode[] = [
   {
     id: 'wp-aisle-1',
     label: 'North-West Quad Aisle',
-    x: 42.0,
-    y: 57.8,
+    x: 43.5,
+    y: 54.5,
     connections: [
       'wp-north-corridor',
       'wp-central-hub',
@@ -273,17 +342,13 @@ const CORE_WAYPOINTS: WaypointNode[] = [
       'wp-desk-6',
       'wp-desk-7',
       'wp-desk-8',
-      'wp-desk-17',
-      'wp-desk-18',
-      'wp-desk-19',
-      'wp-desk-20',
     ],
   },
   {
     id: 'wp-aisle-2',
     label: 'North-East Quad Aisle',
-    x: 57.0,
-    y: 57.8,
+    x: 56.5,
+    y: 54.5,
     connections: [
       'wp-north-corridor',
       'wp-entry-door',
@@ -295,17 +360,13 @@ const CORE_WAYPOINTS: WaypointNode[] = [
       'wp-desk-10',
       'wp-desk-11',
       'wp-desk-12',
-      'wp-desk-21',
-      'wp-desk-22',
-      'wp-desk-23',
-      'wp-desk-24',
     ],
   },
   {
     id: 'wp-central-hub',
     label: 'Central Diamond Nexus',
-    x: 49.5,
-    y: 64.0,
+    x: 50.0,
+    y: 63.5,
     connections: [
       'wp-north-corridor',
       'wp-aisle-1',
@@ -314,6 +375,10 @@ const CORE_WAYPOINTS: WaypointNode[] = [
       'wp-aisle-4',
       'wp-south-corridor',
       'wp-boss-desk',
+      'wp-desk-13',
+      'wp-desk-14',
+      'wp-desk-15',
+      'wp-desk-16',
     ],
   },
   {
@@ -340,11 +405,27 @@ const CORE_WAYPOINTS: WaypointNode[] = [
   {
     id: 'wp-aisle-3',
     label: 'South-West Quad Aisle',
-    x: 42.0,
-    y: 70.2,
+    x: 34.0,
+    y: 64.5,
     connections: [
       'wp-aisle-1',
       'wp-central-hub',
+      'wp-south-corridor',
+      'wp-desk-17',
+      'wp-desk-18',
+      'wp-desk-19',
+      'wp-desk-20',
+    ],
+  },
+  {
+    id: 'wp-aisle-4',
+    label: 'South-East Quad Aisle',
+    x: 56.5,
+    y: 68.5,
+    connections: [
+      'wp-aisle-2',
+      'wp-central-hub',
+      'wp-memory-vault',
       'wp-south-corridor',
       'wp-desk-25',
       'wp-desk-26',
@@ -353,34 +434,22 @@ const CORE_WAYPOINTS: WaypointNode[] = [
     ],
   },
   {
-    id: 'wp-aisle-4',
-    label: 'South-East Quad Aisle',
-    x: 57.0,
-    y: 70.2,
-    connections: [
-      'wp-aisle-2',
-      'wp-central-hub',
-      'wp-memory-vault',
-      'wp-south-corridor',
-      'wp-desk-29',
-      'wp-desk-30',
-      'wp-desk-31',
-      'wp-desk-32',
-    ],
-  },
-  {
     id: 'wp-south-corridor',
     label: 'South Fleet Promenade',
-    x: 49.5,
-    y: 84.0,
+    x: 45.0,
+    y: 76.0,
     connections: [
       'wp-aisle-3',
       'wp-aisle-4',
       'wp-central-hub',
-      'wp-desk-13',
-      'wp-desk-14',
-      'wp-desk-15',
-      'wp-desk-16',
+      'wp-desk-21',
+      'wp-desk-22',
+      'wp-desk-23',
+      'wp-desk-24',
+      'wp-desk-29',
+      'wp-desk-30',
+      'wp-desk-31',
+      'wp-desk-32',
     ],
   },
 ]
@@ -472,17 +541,272 @@ export function filterRoomForAgentCount(
   }
 }
 
-export const COMMAND_OFFICE_ROOM: IsometricRoom = {
+function createRoomFromPodCenters(config: {
+  id: string
+  name: string
+  subtitle: string
+  dayBg: string
+  nightBg: string
+  podCenters: ReadonlyArray<PodCenterSpec>
+  hotspots?: FurnitureAsset[]
+}): IsometricRoom {
+  const { workstations, deskFurniture, deskWaypoints } = buildQuadPodWorkstations(
+    8,
+    config.podCenters
+  )
+  return {
+    id: config.id,
+    name: config.name,
+    subtitle: config.subtitle,
+    logicalWidth: 1376,
+    logicalHeight: 768,
+    backgrounds: {
+      day: config.dayBg,
+      night: config.nightBg,
+    },
+    furniture: [...deskFurniture, ...(config.hotspots ?? WALL_HOTSPOT_FURNITURE)],
+    workstations,
+    waypoints: [...CORE_WAYPOINTS, ...deskWaypoints],
+  }
+}
+
+export const COMMAND_OFFICE_ROOM: IsometricRoom = createRoomFromPodCenters({
   id: 'aim-command-office',
   name: 'A.I.M. / LeadDeeds Sovereign Command Center',
   subtitle: 'J.O.S.H.U.A. Multi-Vessel Isometric Fleet Floor',
-  logicalWidth: 1376,
-  logicalHeight: 768,
-  backgrounds: {
-    day: '/rooms/office-day.png',
-    night: '/rooms/office-night.png',
+  dayBg: '/rooms/office-day.png',
+  nightBg: '/rooms/office-night.png',
+  podCenters: QUAD_POD_CENTERS,
+})
+
+/**
+ * Direction B — Sovereign Ops / War Room ("J.O.S.H.U.A. Command Center")
+ * Dark slate/industrial floor with glowing cyan data conduits, panoramic Mission Control
+ * Telemetry Wall on the right wall, and LanceDB Quantum Server Core.
+ */
+export const WAR_ROOM_POD_CENTERS: ReadonlyArray<PodCenterSpec> = [
+  {
+    podIndex: 1,
+    name: 'Command Bridge Pod 1 (J.O.S.H.U.A. Overwatch)',
+    cx: 50.0,
+    cy: 48.0,
+    aisleWaypointId: 'wp-north-corridor',
+    benchAxis: 'slash',
   },
-  furniture: [...deskFurniture, ...WALL_HOTSPOT_FURNITURE],
-  workstations,
-  waypoints: [...CORE_WAYPOINTS, ...deskWaypoints],
+  {
+    podIndex: 2,
+    name: 'Conduit Sector Alpha (West Ops)',
+    cx: 38.0,
+    cy: 57.5,
+    aisleWaypointId: 'wp-aisle-1',
+    benchAxis: 'slash',
+  },
+  {
+    podIndex: 3,
+    name: 'Conduit Sector Beta (Telemetry Wall Ops)',
+    cx: 62.5,
+    cy: 58.0,
+    aisleWaypointId: 'wp-aisle-2',
+    benchAxis: 'slash',
+  },
+  {
+    podIndex: 4,
+    name: 'Holographic Nexus Pod 4 (Central Core)',
+    cx: 50.0,
+    cy: 67.5,
+    aisleWaypointId: 'wp-central-hub',
+    benchAxis: 'slash',
+  },
+  {
+    podIndex: 5,
+    name: 'Conduit Sector Gamma (South-West Strike)',
+    cx: 27.5,
+    cy: 67.0,
+    aisleWaypointId: 'wp-aisle-3',
+    benchAxis: 'slash',
+  },
+  {
+    podIndex: 6,
+    name: 'Conduit Sector Delta (South-East Quantum Core)',
+    cx: 62.5,
+    cy: 71.5,
+    aisleWaypointId: 'wp-aisle-4',
+    benchAxis: 'slash',
+  },
+  {
+    podIndex: 7,
+    name: 'South Perimeter Pod 7 (South-West Promenade)',
+    cx: 38.5,
+    cy: 77.0,
+    aisleWaypointId: 'wp-south-corridor',
+    benchAxis: 'slash',
+  },
+  {
+    podIndex: 8,
+    name: 'Deep Overwatch Pod 8 (South Apex)',
+    cx: 50.5,
+    cy: 80.5,
+    aisleWaypointId: 'wp-south-corridor',
+    benchAxis: 'slash',
+  },
+]
+
+export const SOVEREIGN_WAR_ROOM: IsometricRoom = createRoomFromPodCenters({
+  id: 'sovereign-war-room',
+  name: 'J.O.S.H.U.A. Sovereign Ops War Room',
+  subtitle: 'Direction B · Mission Control Telemetry Wall, Data Conduits & Quantum Vault',
+  dayBg: '/rooms/war-room-day.png',
+  nightBg: '/rooms/war-room-night.png',
+  podCenters: WAR_ROOM_POD_CENTERS,
+})
+
+/**
+ * Direction A — Multi-Zone "Agency Floorplan" (Sims / Project Zomboid Cutaway Building)
+ * Cutaway building with low glass partition walls dividing the floor into:
+ * - J.O.S.H.U.A. Glass Command Bridge (top center)
+ * - 4 Distinct Project Bays (LeadDeeds, TBSoftwash, Skorbane, Core Infrastructure)
+ * - Server Vault (LanceDB / Memory Wiki) & Breakroom Lounge
+ */
+export const CUTAWAY_AGENCY_POD_CENTERS: ReadonlyArray<PodCenterSpec> = [
+  {
+    podIndex: 1,
+    name: 'J.O.S.H.U.A. Glass Command Bridge (Top Center)',
+    cx: 49.5,
+    cy: 45.5,
+    aisleWaypointId: 'wp-north-corridor',
+    benchAxis: 'slash',
+  },
+  {
+    podIndex: 2,
+    name: 'Project Bay A — LeadDeeds & Content Division',
+    cx: 36.0,
+    cy: 57.5,
+    aisleWaypointId: 'wp-aisle-1',
+    benchAxis: 'slash',
+  },
+  {
+    podIndex: 3,
+    name: 'Project Bay B — TBSoftwash & AI Book Division',
+    cx: 65.0,
+    cy: 61.5,
+    aisleWaypointId: 'wp-aisle-2',
+    benchAxis: 'slash',
+  },
+  {
+    podIndex: 4,
+    name: 'Project Bay C — Skorbane & YouTube Media Studio',
+    cx: 48.0,
+    cy: 66.5,
+    aisleWaypointId: 'wp-central-hub',
+    benchAxis: 'slash',
+  },
+  {
+    podIndex: 5,
+    name: 'Project Bay D — Growth, GBP & Calendar Ops',
+    cx: 28.0,
+    cy: 69.0,
+    aisleWaypointId: 'wp-aisle-3',
+    benchAxis: 'slash',
+  },
+  {
+    podIndex: 6,
+    name: 'Infrastructure Bay E — Tmux, Cron & Connect Daemons',
+    cx: 49.5,
+    cy: 78.5,
+    aisleWaypointId: 'wp-south-corridor',
+    benchAxis: 'slash',
+  },
+  {
+    podIndex: 7,
+    name: 'Server Vault & QA Compliance Bay',
+    cx: 61.5,
+    cy: 73.0,
+    aisleWaypointId: 'wp-aisle-4',
+    benchAxis: 'slash',
+  },
+  {
+    podIndex: 8,
+    name: 'South-West Expansion Studio Bay',
+    cx: 38.5,
+    cy: 77.5,
+    aisleWaypointId: 'wp-south-corridor',
+    benchAxis: 'slash',
+  },
+]
+
+export const CUTAWAY_AGENCY_ROOM: IsometricRoom = createRoomFromPodCenters({
+  id: 'cutaway-agency',
+  name: 'A.I.M. Multi-Zone Cutaway Agency Floorplan',
+  subtitle: 'Direction A · Glass Command Bridge, Partitioned Project Bays & LanceDB Vault',
+  dayBg: '/rooms/agency-floorplan-day.png',
+  nightBg: '/rooms/agency-floorplan-night.png',
+  podCenters: CUTAWAY_AGENCY_POD_CENTERS,
+})
+
+export const DEFAULT_WALL_BOARD_RECT: WallBoardRectConfig = {
+  left: 63.0,
+  top: 22.2,
+  width: 11.4,
+  height: 15.8,
+  skewDeg: 25.6,
+  zIndex: 15,
+  variant: 'whiteboard',
+}
+
+/**
+ * Direction C — Standardized Theme Pack Registry
+ */
+export const OFFICE_THEME_PACKS: ReadonlyArray<OfficeThemePack> = [
+  {
+    id: 'sovereign-war-room',
+    name: 'Direction B · Sovereign Ops War Room',
+    shortLabel: '⚡ War Room (Mission Control)',
+    badge: 'DIRECTION B',
+    description:
+      'Dark industrial slate floor with glowing data conduits, panoramic Mission Control Telemetry Wall, and Quantum Memory Core.',
+    room: SOVEREIGN_WAR_ROOM,
+    wallBoardRect: {
+      left: 62.5,
+      top: 21.5,
+      width: 12.2,
+      height: 16.2,
+      skewDeg: 25.6,
+      zIndex: 15,
+      variant: 'telemetry-wall',
+    },
+  },
+  {
+    id: 'cutaway-agency',
+    name: 'Direction A · Multi-Zone Cutaway Agency',
+    shortLabel: '🏢 Cutaway Agency (Multi-Bay)',
+    badge: 'DIRECTION A',
+    description:
+      'Sims / Project Zomboid cutaway building with glass partition walls dividing J.O.S.H.U.A. Command Bridge, 4 Project Bays, and Breakroom.',
+    room: CUTAWAY_AGENCY_ROOM,
+    wallBoardRect: {
+      left: 63.0,
+      top: 22.0,
+      width: 11.4,
+      height: 15.8,
+      skewDeg: 25.6,
+      zIndex: 15,
+      variant: 'glass-board',
+    },
+  },
+  {
+    id: 'classic-command',
+    name: 'Classic A.I.M. Executive Studio',
+    shortLabel: '🪵 Classic Studio (Hardwood)',
+    badge: 'CLASSIC',
+    description:
+      'Original sunlit hardwood diamond floor with calibrated 2x2 parallel standing desk benches and dry-erase Kanban wall board.',
+    room: COMMAND_OFFICE_ROOM,
+    wallBoardRect: DEFAULT_WALL_BOARD_RECT,
+  },
+]
+
+export function getOfficeThemePack(themeId?: ThemePackId | string | null): OfficeThemePack {
+  return (
+    OFFICE_THEME_PACKS.find((t) => t.id === themeId) ?? OFFICE_THEME_PACKS[0]
+  )
 }

@@ -220,7 +220,10 @@ describe('AIM-Office Isometric 2.5D Engine, Elastic 4-Way Quad Pods, Pan/Zoom & 
     expect(stage.getAttribute('data-pan')).toBe('0,0')
 
     const joshuaActor = screen.getByTestId('character-aim-joshua')
-    expect(Number(joshuaActor.getAttribute('data-zindex'))).toBe(485)
+    const bossDesk = screen.getByTestId('furniture-desk-1')
+    expect(Number(joshuaActor.getAttribute('data-zindex'))).toBe(
+      Number(bossDesk.getAttribute('data-zindex')) - 5
+    )
     fireEvent.click(joshuaActor)
     expect(onSelectChar).toHaveBeenCalledWith(sampleChars[0])
   })

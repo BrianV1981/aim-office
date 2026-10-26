@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { OfficeCharacter } from '../office/types'
 import {
   AimConnectClient,
@@ -54,6 +54,13 @@ export const AgentInspectorDrawer: React.FC<AgentInspectorDrawerProps> = ({
   const [communicateInstruction, setCommunicateInstruction] = useState<string>('')
   const [communicateStatus, setCommunicateStatus] = useState<string | null>(null)
 
+  // Floating overlay drag state so the user can move the card anywhere over the fullscreen office
+  const [dragOffset, setDragOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 })
+  const [isDraggingCard, setIsDraggingCard] = useState<boolean>(false)
+  const dragRef = useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(
+    null
+  )
+
   useEffect(() => {
     if (!character) {
       setForensics(null)
@@ -98,12 +105,48 @@ export const AgentInspectorDrawer: React.FC<AgentInspectorDrawerProps> = ({
     }
   }, [character, client, demoMode])
 
+  useEffect(() => {
+    if (!isDraggingCard) return
+    const handleWindowMouseMove = (e: MouseEvent) => {
+      if (!dragRef.current) return
+      const dx = e.clientX - dragRef.current.startX
+      const dy = e.clientY - dragRef.current.startY
+      setDragOffset({
+        x: Math.round(dragRef.current.origX + dx),
+        y: Math.round(dragRef.current.origY + dy),
+      })
+    }
+    const handleWindowMouseUp = () => {
+      setIsDraggingCard(false)
+      dragRef.current = null
+    }
+    window.addEventListener('mousemove', handleWindowMouseMove)
+    window.addEventListener('mouseup', handleWindowMouseUp)
+    return () => {
+      window.removeEventListener('mousemove', handleWindowMouseMove)
+      window.removeEventListener('mouseup', handleWindowMouseUp)
+    }
+  }, [isDraggingCard])
+
   if (!character) return null
 
   const terminalHref = `${aimConnectBaseUrl.replace(/\/$/, '')}/?session=${encodeURIComponent(
     character.sessionName
   )}`
   const isAmnesia = character.context.pct >= 30 || character.status === 'AMNESIA'
+
+  const handleHeaderMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (e.button !== 0) return
+    const target = e.target as HTMLElement
+    if (target.closest('button') || target.closest('a')) return
+    setIsDraggingCard(true)
+    dragRef.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      origX: dragOffset.x,
+      origY: dragOffset.y,
+    }
+  }
 
   const handleReadAloud = () => {
     const text =
@@ -214,11 +257,24 @@ export const AgentInspectorDrawer: React.FC<AgentInspectorDrawerProps> = ({
 
   return (
     <aside
-      className="agent-inspector-drawer"
+      className={`agent-inspector-drawer is-floating-overlay${
+        isDraggingCard ? ' is-dragging-card' : ''
+      }`}
       data-testid="agent-inspector-drawer"
+      data-floating="true"
+      data-drag-offset={`${dragOffset.x},${dragOffset.y}`}
       aria-label={`Agent Inspector for ${character.sessionName}`}
+      style={{
+        transform: `translate(${dragOffset.x}px, ${dragOffset.y}px)`,
+      }}
     >
-      <div className="drawer-header">
+      {/* Draggable Header Bar */}
+      <div
+        className="drawer-header is-draggable-handle"
+        data-testid="inspector-drag-handle"
+        onMouseDown={handleHeaderMouseDown}
+        title="Drag to move Agent Cockpit anywhere over the fullscreen office"
+      >
         <div className="drawer-identity">
           <div className="drawer-avatar-box">
             <img
@@ -241,245 +297,266 @@ export const AgentInspectorDrawer: React.FC<AgentInspectorDrawerProps> = ({
               <span className={`vessel-chip vessel-${character.vessel.toLowerCase()}`}>
                 {character.vessel}
               </span>
+              <span className="drag-hint-pill">✥ Drag Card</span>
             </div>
             <p className="drawer-role-subtitle">
               {character.roleTitle} · Desk <code>{character.deskSpotId}</code>
             </p>
           </div>
         </div>
-        <button
-          type="button"
-          className="drawer-close-btn"
-          data-testid="btn-close-inspector"
-          onClick={onClose}
-        >
-          ✕
-        </button>
+        <div className="drawer-header-actions">
+          {(dragOffset.x !== 0 || dragOffset.y !== 0) && (
+            <button
+              type="button"
+              className="drawer-reset-pos-btn"
+              data-testid="btn-reset-inspector-pos"
+              onClick={() => setDragOffset({ x: 0, y: 0 })}
+              title="Reset Card Position"
+            >
+              Reset Pos
+            </button>
+          )}
+          <button
+            type="button"
+            className="drawer-close-btn"
+            data-testid="btn-close-inspector"
+            onClick={onClose}
+          >
+            ✕
+          </button>
+        </div>
       </div>
 
-      {/* 30%-Rule Context Window Gauge */}
-      <section className="drawer-section">
-        <div className="section-label-row">
-          <span>30%-Rule Context Window Telemetry</span>
-          <strong
-            className={`pct-readout severity-${character.context.severity}`}
-            data-testid="inspector-context-pct"
-          >
-            {character.context.pct}% {isAmnesia ? '🔥 AMNESIA ALERT' : ''}
-          </strong>
-        </div>
-        <div className="inspector-context-bar-track">
-          <div
-            className={`inspector-context-bar-fill severity-${character.context.severity}`}
-            style={{ width: `${Math.min(100, Math.max(4, character.context.pct))}%` }}
-          />
-        </div>
-        <p className="context-hint">
-          {isAmnesia
-            ? 'Threshold >= 30% crossed: execute /aim-memory-wiki and /aim-handoff.'
-            : 'Operating within sovereign < 30% recall precision envelope.'}
-        </p>
-      </section>
-
-      {/* Last Agent Response Viewer + TTS Read-Aloud */}
-      <section className="drawer-section">
-        <div className="section-label-row">
-          <span>Last Agent Response (Live Tmux Scrollback)</span>
-          <button
-            type="button"
-            className="btn-tts-read-aloud"
-            data-testid="btn-tts-read-aloud"
-            onClick={handleReadAloud}
-            title="Read last agent response aloud via SpeechSynthesis TTS"
-          >
-            🔊 Read Aloud
-          </button>
-        </div>
-        <pre className="inspector-last-response-box" data-testid="inspector-last-response">
-          {sessionOutput?.output ||
-            `[${character.sessionName}] Active on ${character.gitBranch || 'main'} (${character.status})`}
-        </pre>
-        {ttsStatus && (
-          <div className="tts-status-pill" data-testid="tts-status">
-            {ttsStatus}
-          </div>
-        )}
-      </section>
-
-      {/* Direct Reply Cockpit + Voice STT + 1-Tap Macro Pills */}
-      <section className="drawer-section" data-testid="inspector-direct-reply-section">
-        <div className="section-label-row">
-          <span>Direct Tmux Reply & Voice / Macro Cockpit</span>
-          <button
-            type="button"
-            className={`btn-mic-dictation${isListening ? ' is-listening' : ''}`}
-            data-testid="btn-mic-dictation"
-            onClick={handleToggleMicDictation}
-            title="Dictate reply via Web Speech API (SpeechRecognition)"
-          >
-            {isListening ? '🔴 Listening...' : '🎤 Voice Mic'}
-          </button>
-        </div>
-        <div className="direct-reply-input-row">
-          <input
-            type="text"
-            className="input-direct-reply"
-            data-testid="input-direct-reply"
-            placeholder={`Send prompt directly to ${character.sessionName}...`}
-            value={replyText}
-            onChange={(e) => setReplyText(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault()
-                void handleSendReply()
-              }
-            }}
-          />
-          <button
-            type="button"
-            className="btn-send-direct-reply"
-            data-testid="btn-send-direct-reply"
-            onClick={() => void handleSendReply()}
-          >
-            Send ↵
-          </button>
-        </div>
-
-        {/* 1-Tap Sovereign Macro Pills */}
-        <div className="macro-pills-bar" data-testid="macro-pills-bar">
-          {MACRO_COMMANDS.map((macro) => (
-            <button
-              key={macro.id}
-              type="button"
-              className="btn-macro-pill"
-              data-testid={`btn-macro-${macro.id}`}
-              onClick={() => void handleSendReply(macro.command)}
+      {/* Scrollable Wide Cockpit Body */}
+      <div className="drawer-scrollable-body">
+        {/* 30%-Rule Context Window Gauge */}
+        <section className="drawer-section">
+          <div className="section-label-row">
+            <span>30%-Rule Context Window Telemetry</span>
+            <strong
+              className={`pct-readout severity-${character.context.severity}`}
+              data-testid="inspector-context-pct"
             >
-              {macro.label}
+              {character.context.pct}% {isAmnesia ? '🔥 AMNESIA ALERT' : ''}
+            </strong>
+          </div>
+          <div className="inspector-context-bar-track">
+            <div
+              className={`inspector-context-bar-fill severity-${character.context.severity}`}
+              style={{ width: `${Math.min(100, Math.max(4, character.context.pct))}%` }}
+            />
+          </div>
+          <p className="context-hint">
+            {isAmnesia
+              ? 'Threshold >= 30% crossed: execute /aim-memory-wiki and /aim-handoff.'
+              : 'Operating within sovereign < 30% recall precision envelope.'}
+          </p>
+        </section>
+
+        {/* Last Agent Response Viewer + TTS Read-Aloud */}
+        <section className="drawer-section">
+          <div className="section-label-row">
+            <span>Last Agent Response (Live Tmux Scrollback)</span>
+            <button
+              type="button"
+              className="btn-tts-read-aloud"
+              data-testid="btn-tts-read-aloud"
+              onClick={handleReadAloud}
+              title="Read last agent response aloud via SpeechSynthesis TTS"
+            >
+              🔊 Read Aloud
             </button>
-          ))}
-        </div>
-
-        {replyStatus && (
-          <div className="reply-dispatch-status" data-testid="reply-dispatch-status">
-            {replyStatus}
           </div>
-        )}
-      </section>
-
-      {/* 1-Click AIM-Communicate Broker Dropdown + Physical Courier Walk Trigger (#7) */}
-      <section className="drawer-section" data-testid="inspector-communicate-broker">
-        <div className="section-label-row">
-          <span>📡 1-Click `aim-communicate` Broker</span>
-          <span className="muted-count">Courier Walk + Tmux Skill</span>
-        </div>
-        <div className="communicate-broker-row">
-          <select
-            className="select-communicate-target"
-            data-testid="select-communicate-target"
-            aria-label="Target Agent Session"
-            value={targetSession}
-            onChange={(e) => setTargetSession(e.target.value)}
-          >
-            {peerSessions.map((peer) => (
-              <option key={peer} value={peer}>
-                → {peer}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="communicate-broker-row">
-          <input
-            type="text"
-            className="input-communicate-instruction"
-            data-testid="input-communicate-instruction"
-            placeholder={`Directive for ${character.sessionName} to send ${targetSession}...`}
-            value={communicateInstruction}
-            onChange={(e) => setCommunicateInstruction(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault()
-                void handleDispatchCommunicate()
-              }
-            }}
-          />
-          <button
-            type="button"
-            className="btn-dispatch-communicate"
-            data-testid="btn-dispatch-communicate"
-            onClick={() => void handleDispatchCommunicate()}
-          >
-            🚶 Dispatch
-          </button>
-        </div>
-        {communicateStatus && (
-          <div
-            className="communicate-dispatch-status"
-            data-testid="communicate-dispatch-status"
-          >
-            {communicateStatus}
-          </div>
-        )}
-      </section>
-
-      {/* Forensic Tool Call Pills (/api/forensics/{session}) */}
-      <section className="drawer-section">
-        <div className="section-label-row">
-          <span>Live Forensic Tool Call Stream</span>
-          <span className="muted-count">
-            {forensics ? `${forensics.toolCallCount} calls` : loading ? 'Loading...' : '0 calls'}
-          </span>
-        </div>
-        <div className="forensic-pills-list" data-testid="inspector-forensic-pills">
-          {forensics?.recentToolPills && forensics.recentToolPills.length > 0 ? (
-            forensics.recentToolPills.map((pill, idx) => (
-              <div key={`${pill.name}-${idx}`} className="forensic-pill-item">
-                <span className="pill-tool-name">[{pill.name}]</span>
-                <code className="pill-tool-summary">{pill.summary}</code>
-              </div>
-            ))
-          ) : (
-            <div className="forensic-empty">No recent tool invocations recorded.</div>
-          )}
-        </div>
-      </section>
-
-      {/* Workspace Git Branch, Worktrees & Memory Wiki Delta (/api/workspace/context) */}
-      <section className="drawer-section">
-        <div className="section-label-row">
-          <span>GitOps Worktree & Memory Wiki Context</span>
-          <code className="branch-chip" data-testid="inspector-git-branch">
-            🌿 {workspaceCtx?.branch || character.gitBranch || 'main'}
-          </code>
-        </div>
-        <div className="workspace-meta-grid">
-          <div>
-            <span className="meta-key">Active Path:</span>{' '}
-            <code>{workspaceCtx?.panePath || character.worktreePath || `/home/kingb/${character.sessionName}`}</code>
-          </div>
-          {workspaceCtx?.worktrees && workspaceCtx.worktrees.length > 0 && (
-            <div>
-              <span className="meta-key">Isolated Worktrees:</span>{' '}
-              {workspaceCtx.worktrees.map((wt) => (
-                <code key={wt.name} className="worktree-badge">
-                  workspace/{wt.name} ({wt.branch})
-                </code>
-              ))}
+          <pre className="inspector-last-response-box" data-testid="inspector-last-response">
+            {sessionOutput?.output ||
+              `[${character.sessionName}] Active on ${character.gitBranch || 'main'} (${character.status})`}
+          </pre>
+          {ttsStatus && (
+            <div className="tts-status-pill" data-testid="tts-status">
+              {ttsStatus}
             </div>
           )}
+        </section>
+
+        {/* 2-Column Wide Grid: Direct Reply Cockpit (Left) + 1-Click AIM-Communicate Broker (Right) */}
+        <div className="inspector-two-col-grid">
+          {/* Direct Reply Cockpit + Voice STT + 1-Tap Macro Pills */}
+          <section className="drawer-section" data-testid="inspector-direct-reply-section">
+            <div className="section-label-row">
+              <span>Direct Tmux Reply & Voice / Macros</span>
+              <button
+                type="button"
+                className={`btn-mic-dictation${isListening ? ' is-listening' : ''}`}
+                data-testid="btn-mic-dictation"
+                onClick={handleToggleMicDictation}
+                title="Dictate reply via Web Speech API (SpeechRecognition)"
+              >
+                {isListening ? '🔴 Listening...' : '🎤 Voice Mic'}
+              </button>
+            </div>
+            <div className="direct-reply-input-row">
+              <input
+                type="text"
+                className="input-direct-reply"
+                data-testid="input-direct-reply"
+                placeholder={`Send prompt directly to ${character.sessionName}...`}
+                value={replyText}
+                onChange={(e) => setReplyText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    void handleSendReply()
+                  }
+                }}
+              />
+              <button
+                type="button"
+                className="btn-send-direct-reply"
+                data-testid="btn-send-direct-reply"
+                onClick={() => void handleSendReply()}
+              >
+                Send ↵
+              </button>
+            </div>
+
+            {/* 1-Tap Sovereign Macro Pills */}
+            <div className="macro-pills-bar" data-testid="macro-pills-bar">
+              {MACRO_COMMANDS.map((macro) => (
+                <button
+                  key={macro.id}
+                  type="button"
+                  className="btn-macro-pill"
+                  data-testid={`btn-macro-${macro.id}`}
+                  onClick={() => void handleSendReply(macro.command)}
+                >
+                  {macro.label}
+                </button>
+              ))}
+            </div>
+
+            {replyStatus && (
+              <div className="reply-dispatch-status" data-testid="reply-dispatch-status">
+                {replyStatus}
+              </div>
+            )}
+          </section>
+
+          {/* 1-Click AIM-Communicate Broker Dropdown + Physical Courier Walk Trigger (#7) */}
+          <section className="drawer-section" data-testid="inspector-communicate-broker">
+            <div className="section-label-row">
+              <span>📡 1-Click `aim-communicate` Broker</span>
+              <span className="muted-count">Courier Walk</span>
+            </div>
+            <div className="communicate-broker-row">
+              <select
+                className="select-communicate-target"
+                data-testid="select-communicate-target"
+                aria-label="Target Agent Session"
+                value={targetSession}
+                onChange={(e) => setTargetSession(e.target.value)}
+              >
+                {peerSessions.map((peer) => (
+                  <option key={peer} value={peer}>
+                    → {peer}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="communicate-broker-row">
+              <input
+                type="text"
+                className="input-communicate-instruction"
+                data-testid="input-communicate-instruction"
+                placeholder={`Directive for ${character.sessionName} to send ${targetSession}...`}
+                value={communicateInstruction}
+                onChange={(e) => setCommunicateInstruction(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    void handleDispatchCommunicate()
+                  }
+                }}
+              />
+              <button
+                type="button"
+                className="btn-dispatch-communicate"
+                data-testid="btn-dispatch-communicate"
+                onClick={() => void handleDispatchCommunicate()}
+              >
+                🚶 Dispatch
+              </button>
+            </div>
+            {communicateStatus && (
+              <div
+                className="communicate-dispatch-status"
+                data-testid="communicate-dispatch-status"
+              >
+                {communicateStatus}
+              </div>
+            )}
+          </section>
         </div>
 
-        <div className="wiki-delta-box" data-testid="inspector-wiki-delta">
-          <div className="meta-key">Recent memory-wiki/log.md Delta:</div>
-          <ul>
-            {(workspaceCtx?.wikiLogDelta ?? [
-              `[2026-10-26] Active telemetry sync for ${character.sessionName}`,
-            ]).map((entry, idx) => (
-              <li key={idx}>{entry}</li>
-            ))}
-          </ul>
+        {/* 2-Column Wide Grid: Forensic Tool Call Pills (Left) + GitOps Worktree & Wiki Delta (Right) */}
+        <div className="inspector-two-col-grid">
+          <section className="drawer-section">
+            <div className="section-label-row">
+              <span>Live Forensic Tool Call Stream</span>
+              <span className="muted-count">
+                {forensics ? `${forensics.toolCallCount} calls` : loading ? 'Loading...' : '0 calls'}
+              </span>
+            </div>
+            <div className="forensic-pills-list" data-testid="inspector-forensic-pills">
+              {forensics?.recentToolPills && forensics.recentToolPills.length > 0 ? (
+                forensics.recentToolPills.map((pill, idx) => (
+                  <div key={`${pill.name}-${idx}`} className="forensic-pill-item">
+                    <span className="pill-tool-name">[{pill.name}]</span>
+                    <code className="pill-tool-summary">{pill.summary}</code>
+                  </div>
+                ))
+              ) : (
+                <div className="forensic-empty">No recent tool invocations recorded.</div>
+              )}
+            </div>
+          </section>
+
+          <section className="drawer-section">
+            <div className="section-label-row">
+              <span>GitOps Worktree & Memory Wiki</span>
+              <code className="branch-chip" data-testid="inspector-git-branch">
+                🌿 {workspaceCtx?.branch || character.gitBranch || 'main'}
+              </code>
+            </div>
+            <div className="workspace-meta-grid">
+              <div>
+                <span className="meta-key">Active Path:</span>{' '}
+                <code>{workspaceCtx?.panePath || character.worktreePath || `/home/kingb/${character.sessionName}`}</code>
+              </div>
+              {workspaceCtx?.worktrees && workspaceCtx.worktrees.length > 0 && (
+                <div>
+                  <span className="meta-key">Worktrees:</span>{' '}
+                  {workspaceCtx.worktrees.map((wt) => (
+                    <code key={wt.name} className="worktree-badge">
+                      workspace/{wt.name} ({wt.branch})
+                    </code>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="wiki-delta-box" data-testid="inspector-wiki-delta">
+              <div className="meta-key">Recent memory-wiki/log.md Delta:</div>
+              <ul>
+                {(workspaceCtx?.wikiLogDelta ?? [
+                  `[2026-10-26] Active telemetry sync for ${character.sessionName}`,
+                ]).map((entry, idx) => (
+                  <li key={idx}>{entry}</li>
+                ))}
+              </ul>
+            </div>
+          </section>
         </div>
-      </section>
+      </div>
 
       {/* Actions Footer */}
       <div className="drawer-footer">

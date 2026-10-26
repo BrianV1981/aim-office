@@ -226,10 +226,10 @@ body {
   text-align: center;
 }
 
-/* Standing Desks (bottom-center leg anchor: translate(-50%, -100%), height: 12% / 92px) */
+/* Standing Desks (bottom-center leg anchor: translate(-50%, -100%), height: 9.0% / 68px) */
 .office-furniture-item {
   transform: translate(-50%, -100%);
-  height: 12%;
+  height: 9.0%;
 }
 
 .office-furniture-item.is-interactive:hover {
@@ -285,6 +285,50 @@ body {
   --tb-surface: rgba(238, 240, 240, 0.92);
   --tb-ink: #253556;
   --tb-rule: #9aa5b8;
+}
+
+/* Direction B — Sovereign War Room Mission Control Telemetry Wall Variant */
+.wall-task-board.variant-telemetry-wall {
+  --tb-surface: rgba(6, 18, 34, 0.92);
+  --tb-ink: #38bdf8;
+  --tb-rule: rgba(56, 189, 248, 0.45);
+}
+
+.wall-task-board.variant-telemetry-wall .wall-task-board-surface {
+  background: linear-gradient(165deg, rgba(8, 28, 52, 0.95), rgba(4, 12, 24, 0.96));
+  box-shadow: inset 0 0 0 0.6cqw rgba(56, 189, 248, 0.55), 0 0 14px rgba(56, 189, 248, 0.25);
+}
+
+/* Direction A — Multi-Zone Cutaway Agency Frosted Glass Board Variant */
+.wall-task-board.variant-glass-board {
+  --tb-surface: rgba(224, 242, 254, 0.88);
+  --tb-ink: #0f172a;
+  --tb-rule: rgba(14, 165, 233, 0.45);
+}
+
+/* Theme Pack Switcher Select in TopCommandBar */
+.theme-switcher-label {
+  display: inline-flex;
+  align-items: center;
+}
+
+.sr-only-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+}
+
+.hud-select-theme {
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  background: #0f172a;
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.55);
+  cursor: pointer;
 }
 
 .wall-task-board:hover .wall-task-board-surface,
@@ -457,7 +501,7 @@ body {
 
 .office-character-actor {
   transform: translate(-50%, -100%);
-  height: 11.2%;
+  height: 9.2%;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -625,17 +669,87 @@ body {
   background: var(--accent-red);
 }
 
-/* Agent Inspector Drawer */
+/* Agent Inspector Drawer — Floating, Draggable, Scrollable, Wide Overlay Card */
 .agent-inspector-drawer {
-  width: 360px;
-  background: var(--bg-panel);
-  border: 1px solid var(--border-cyan);
-  border-radius: 12px;
+  position: fixed;
+  top: 76px;
+  right: 22px;
+  width: 560px;
+  max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 96px);
+  z-index: 1650;
+  background: rgba(11, 17, 32, 0.96);
+  backdrop-filter: blur(12px);
+  border: 1.5px solid rgba(56, 189, 248, 0.55);
+  border-radius: 14px;
   padding: 14px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.7);
+  gap: 10px;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.85), 0 0 24px rgba(56, 189, 248, 0.18);
+}
+
+.agent-inspector-drawer.is-dragging-card {
+  user-select: none;
+  border-color: var(--accent-gold);
+}
+
+.drawer-header.is-draggable-handle {
+  cursor: grab;
+  padding: 4px 6px 8px;
+  border-bottom: 1px solid rgba(56, 189, 248, 0.22);
+}
+
+.drawer-header.is-draggable-handle:active {
+  cursor: grabbing;
+}
+
+.drawer-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.drawer-reset-pos-btn {
+  background: #1e293b;
+  border: 1px solid rgba(56, 189, 248, 0.4);
+  color: #bae6fd;
+  border-radius: 6px;
+  padding: 3px 8px;
+  font-size: 10.5px;
+  font-family: monospace;
+  cursor: pointer;
+}
+
+.drag-hint-pill {
+  font-size: 9px;
+  font-family: monospace;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: rgba(56, 189, 248, 0.14);
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  color: #7dd3fc;
+}
+
+.drawer-scrollable-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow-y: auto;
+  padding-right: 4px;
+  max-height: calc(100vh - 230px);
+}
+
+.inspector-two-col-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+@media (max-width: 680px) {
+  .inspector-two-col-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .drawer-header {

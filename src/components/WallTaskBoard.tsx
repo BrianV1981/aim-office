@@ -1,21 +1,24 @@
 import React, { useState } from 'react'
+import { WallBoardRectConfig } from '../office/types'
 import { DEFAULT_PHASE1_KANBAN_TICKETS, KanbanTicketItem } from './WhiteboardModal'
 
 export interface WallTaskBoardProps {
   tickets?: KanbanTicketItem[]
   boardLabel?: string
   lightingMode?: 'day' | 'night'
+  rect?: WallBoardRectConfig
   onActivate?: () => void
 }
 
-export const WALL_BOARD_RECT = {
+export const WALL_BOARD_RECT: WallBoardRectConfig = {
   left: 63.0,
   top: 22.2,
   width: 11.4,
   height: 15.8,
   skewDeg: 25.6,
   zIndex: 15,
-} as const
+  variant: 'whiteboard',
+}
 
 const COLUMNS: ReadonlyArray<{
   status: KanbanTicketItem['status']
@@ -31,6 +34,7 @@ export const WallTaskBoard: React.FC<WallTaskBoardProps> = ({
   tickets = DEFAULT_PHASE1_KANBAN_TICKETS,
   boardLabel = 'PROJECT #14',
   lightingMode = 'day',
+  rect = WALL_BOARD_RECT,
   onActivate,
 }) => {
   const [hoveredTicketId, setHoveredTicketId] = useState<string | null>(null)
@@ -43,20 +47,23 @@ export const WallTaskBoard: React.FC<WallTaskBoardProps> = ({
     onActivate?.()
   }
 
+  const variant = rect.variant ?? 'whiteboard'
+
   return (
     <>
       <div
-        className={`wall-task-board lighting-${lightingMode}`}
+        className={`wall-task-board lighting-${lightingMode} variant-${variant}`}
         data-testid="wall-task-board"
+        data-variant={variant}
         style={{
           position: 'absolute',
-          left: `${WALL_BOARD_RECT.left}%`,
-          top: `${WALL_BOARD_RECT.top}%`,
-          width: `${WALL_BOARD_RECT.width}%`,
-          height: `${WALL_BOARD_RECT.height}%`,
-          transform: `skewY(${WALL_BOARD_RECT.skewDeg}deg)`,
+          left: `${rect.left}%`,
+          top: `${rect.top}%`,
+          width: `${rect.width}%`,
+          height: `${rect.height}%`,
+          transform: `skewY(${rect.skewDeg}deg)`,
           transformOrigin: '0 0',
-          zIndex: WALL_BOARD_RECT.zIndex,
+          zIndex: rect.zIndex,
         }}
         role="button"
         tabIndex={0}

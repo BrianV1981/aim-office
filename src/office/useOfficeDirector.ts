@@ -253,11 +253,13 @@ export interface UseOfficeDirectorOptions {
   client?: AimConnectClient
   pollIntervalMs?: number
   initialDemoMode?: boolean
+  room?: IsometricRoom
 }
 
 export function useOfficeDirector(options?: UseOfficeDirectorOptions) {
   const client = options?.client ?? defaultAimConnectClient
   const pollIntervalMs = options?.pollIntervalMs ?? 5000
+  const room = options?.room ?? COMMAND_OFFICE_ROOM
   const [demoMode, setDemoMode] = useState<boolean>(options?.initialDemoMode ?? false)
   const [isFallbackActive, setIsFallbackActive] = useState<boolean>(false)
   const [characters, setCharacters] = useState<OfficeCharacter[]>([])
@@ -275,9 +277,9 @@ export function useOfficeDirector(options?: UseOfficeDirectorOptions) {
             dispatch?.recipient ?? 'aim-joshua'
           }`,
       }
-      setCharacters((prev) => applyCourierDispatchToCharacters(prev, event))
+      setCharacters((prev) => applyCourierDispatchToCharacters(prev, event, room))
     },
-    []
+    [room]
   )
 
   const refreshTelemetry = useCallback(async () => {
@@ -290,7 +292,7 @@ export function useOfficeDirector(options?: UseOfficeDirectorOptions) {
     setSwarmDispatches(dispatches)
 
     setCharacters((prev) => {
-      let updated = mapFleetToOfficeCharacters(panes, prev)
+      let updated = mapFleetToOfficeCharacters(panes, prev, room)
       if (dispatches.length > 0) {
         const newest = dispatches[0]
         if (!seenDispatchIdsRef.current.has(newest.id)) {
@@ -299,13 +301,13 @@ export function useOfficeDirector(options?: UseOfficeDirectorOptions) {
             seenDispatchIdsRef.current.add(d.id)
           }
           if (!isInitialLoad) {
-            updated = applyCourierDispatchToCharacters(updated, newest)
+            updated = applyCourierDispatchToCharacters(updated, newest, room)
           }
         }
       }
       return updated
     })
-  }, [client, demoMode])
+  }, [client, demoMode, room])
 
   useEffect(() => {
     void refreshTelemetry()

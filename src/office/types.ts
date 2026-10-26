@@ -69,6 +69,28 @@ export type FurnitureCategory =
 
 export type PodSlotOrientation = 'NW' | 'NE' | 'SW' | 'SE'
 
+export type ThemePackId = 'classic-command' | 'sovereign-war-room' | 'cutaway-agency'
+
+export interface WallBoardRectConfig {
+  left: number
+  top: number
+  width: number
+  height: number
+  skewDeg: number
+  zIndex: number
+  variant?: 'whiteboard' | 'telemetry-wall' | 'glass-board'
+}
+
+export interface OfficeThemePack {
+  id: ThemePackId
+  name: string
+  shortLabel: string
+  badge: string
+  description: string
+  room: IsometricRoom
+  wallBoardRect: WallBoardRectConfig
+}
+
 export interface FurnitureAsset {
   id: string
   label: string

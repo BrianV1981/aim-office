@@ -7,12 +7,28 @@ import {
   KanbanTicketItem,
   WhiteboardModal,
 } from './components/WhiteboardModal'
-import { COMMAND_OFFICE_ROOM } from './office/rooms'
-import { FurnitureAsset, OfficeCharacter } from './office/types'
+import { getOfficeThemePack } from './office/rooms'
+import { FurnitureAsset, OfficeCharacter, ThemePackId } from './office/types'
 import { useOfficeDirector } from './office/useOfficeDirector'
 import './styles/office.css'
 
 export const App: React.FC = () => {
+  const [activeThemeId, setActiveThemeId] = useState<ThemePackId>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = window.localStorage?.getItem('aim-office-theme') as ThemePackId | null
+      if (
+        saved === 'sovereign-war-room' ||
+        saved === 'cutaway-agency' ||
+        saved === 'classic-command'
+      ) {
+        return saved
+      }
+    }
+    return 'sovereign-war-room'
+  })
+
+  const activeThemePack = useMemo(() => getOfficeThemePack(activeThemeId), [activeThemeId])
+
   const {
     characters,
     swarmDispatches,
@@ -22,7 +38,7 @@ export const App: React.FC = () => {
     triggerCourierWalk,
     handleCharactersTick,
     client,
-  } = useOfficeDirector()
+  } = useOfficeDirector({ room: activeThemePack.room })
 
   const [lightingMode, setLightingMode] = useState<'day' | 'night'>('day')
   const [selectedSession, setSelectedSession] = useState<string | null>(null)
@@ -32,9 +48,35 @@ export const App: React.FC = () => {
     DEFAULT_PHASE1_KANBAN_TICKETS
   )
 
+  const handleSelectTheme = (nextThemeId: ThemePackId) => {
+    setActiveThemeId(nextThemeId)
+    if (typeof window !== 'undefined') {
+      try {
+        window.localStorage?.setItem('aim-office-theme', nextThemeId)
+      } catch {
+        // Ignore storage error
+      }
+    }
+  }
+
+  // Realign stationary characters to the active theme pack's workstation coordinates
+  const themedCharacters = useMemo(() => {
+    return characters.map((char) => {
+      if (char.targetWaypoints.length > 0) return char
+      const spot = activeThemePack.room.workstations.find((w) => w.id === char.deskSpotId)
+      if (!spot) return char
+      return {
+        ...char,
+        position: { x: spot.x, y: spot.y },
+        facing: spot.defaultFacing,
+        zIndexOverride: spot.zIndexOverride,
+      }
+    })
+  }, [characters, activeThemePack])
+
   const selectedCharacter = useMemo<OfficeCharacter | null>(
-    () => characters.find((c) => c.sessionName === selectedSession) ?? null,
-    [characters, selectedSession]
+    () => themedCharacters.find((c) => c.sessionName === selectedSession) ?? null,
+    [themedCharacters, selectedSession]
   )
 
   // Dynamically switch the Wall TaskBoard & Whiteboard Modal to the clicked agent's GitHub Project Kanban
@@ -65,12 +107,13 @@ export const App: React.FC = () => {
       return
     }
     if (furniture.category === 'entry-door') {
-      const boss = characters.find((c) => c.sessionName === 'aim-joshua') ?? characters[0]
+      const boss =
+        themedCharacters.find((c) => c.sessionName === 'aim-joshua') ?? themedCharacters[0]
       if (boss) setSelectedSession(boss.sessionName)
       return
     }
     if (furniture.assignedSpotId) {
-      const occupant = characters.find((c) => c.deskSpotId === furniture.assignedSpotId)
+      const occupant = themedCharacters.find((c) => c.deskSpotId === furniture.assignedSpotId)
       if (occupant) {
         setSelectedSession(occupant.sessionName)
       }
@@ -78,32 +121,35 @@ export const App: React.FC = () => {
   }
 
   return (
-    <div className="aim-office-app">
+    <div className="aim-office-app" data-theme-pack={activeThemePack.id}>
       <TopCommandBar
-        title={COMMAND_OFFICE_ROOM.name}
-        subtitle={COMMAND_OFFICE_ROOM.subtitle}
-        characters={characters}
+        title={activeThemePack.room.name}
+        subtitle={activeThemePack.room.subtitle}
+        characters={themedCharacters}
         lightingMode={lightingMode}
         demoMode={demoMode}
         isFallbackActive={isFallbackActive}
+        activeThemeId={activeThemeId}
+        onSelectTheme={handleSelectTheme}
         onToggleLighting={() => setLightingMode((m) => (m === 'day' ? 'night' : 'day'))}
         onTriggerCourierDemo={() =>
           triggerCourierWalk({
             sender: 'aim-office',
             recipient: 'aim-joshua',
-            preview: '[REPORT from aim-office] Issue #6 Live Tmux & Per-Project Kanban Cockpit Live',
+            preview: `[REPORT from aim-office] Theme ${activeThemePack.shortLabel} & Parallel Quad Benches Active`,
           })
         }
         onToggleDemoMode={() => setDemoMode((d) => !d)}
         onOpenWhiteboard={() => setIsWhiteboardOpen(true)}
       />
 
-      <div className="office-main-workspace">
+      <div className="office-main-workspace is-fullscreen-stage">
         <OfficeStage
-          room={COMMAND_OFFICE_ROOM}
-          characters={characters}
+          room={activeThemePack.room}
+          characters={themedCharacters}
           tickets={boardTickets}
           boardLabel={boardLabel}
+          wallBoardRect={activeThemePack.wallBoardRect}
           lightingMode={lightingMode}
           selectedSession={selectedSession}
           onSelectCharacter={(char) => setSelectedSession(char.sessionName)}
@@ -114,7 +160,7 @@ export const App: React.FC = () => {
 
         <AgentInspectorDrawer
           character={selectedCharacter}
-          allCharacters={characters}
+          allCharacters={themedCharacters}
           client={client}
           demoMode={demoMode || isFallbackActive}
           onClose={() => setSelectedSession(null)}

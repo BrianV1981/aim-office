@@ -153,7 +153,7 @@ export const CharacterActor: React.FC<CharacterActorProps> = ({
         position: 'absolute',
         left: `${character.position.x}%`,
         top: `${character.position.y}%`,
-        height: '11.2%',
+        height: '9.2%',
         transform: 'translate(-50%, -100%)',
         zIndex,
         cursor: 'pointer',
@@ -186,7 +186,7 @@ export const CharacterActor: React.FC<CharacterActorProps> = ({
           <img
             src={activeImgSrc}
             alt={`${character.displayName} (${character.facing})`}
-            height={86}
+            height={70}
             style={{
               height: '100%',
               width: 'auto',

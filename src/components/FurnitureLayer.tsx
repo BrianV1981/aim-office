@@ -94,7 +94,7 @@ const FurnitureNode: React.FC<{
         position: 'absolute',
         left: `${item.x}%`,
         top: `${item.y}%`,
-        height: '12%',
+        height: '9.0%',
         transform: 'translate(-50%, -100%)',
         zIndex,
         cursor: item.interactive ? 'pointer' : 'default',
@@ -106,7 +106,7 @@ const FurnitureNode: React.FC<{
         <img
           src={item.spritePath}
           alt={item.label}
-          height={item.heightPx ?? 92}
+          height={item.heightPx ?? 68}
           style={{
             height: '100%',
             width: 'auto',

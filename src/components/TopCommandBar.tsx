@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react'
-import { OfficeCharacter } from '../office/types'
+import { OFFICE_THEME_PACKS } from '../office/rooms'
+import { OfficeCharacter, ThemePackId } from '../office/types'
 
 export interface TopCommandBarProps {
   title: string
@@ -8,6 +9,8 @@ export interface TopCommandBarProps {
   lightingMode: 'day' | 'night'
   demoMode: boolean
   isFallbackActive: boolean
+  activeThemeId?: ThemePackId
+  onSelectTheme?: (themeId: ThemePackId) => void
   onToggleLighting: () => void
   onTriggerCourierDemo: () => void
   onToggleDemoMode: () => void
@@ -21,6 +24,8 @@ export const TopCommandBar: React.FC<TopCommandBarProps> = ({
   lightingMode,
   demoMode,
   isFallbackActive,
+  activeThemeId = 'sovereign-war-room',
+  onSelectTheme,
   onToggleLighting,
   onTriggerCourierDemo,
   onToggleDemoMode,
@@ -100,6 +105,24 @@ export const TopCommandBar: React.FC<TopCommandBarProps> = ({
 
       {/* Interactive Command Controls */}
       <div className="command-actions-group">
+        {onSelectTheme && (
+          <label className="theme-switcher-label" title="Switch Standardized Room Theme Pack">
+            <span className="sr-only-label">Theme:</span>
+            <select
+              className="hud-select-theme"
+              data-testid="select-theme-pack"
+              aria-label="Room Theme Pack"
+              value={activeThemeId}
+              onChange={(e) => onSelectTheme(e.target.value as ThemePackId)}
+            >
+              {OFFICE_THEME_PACKS.map((pack) => (
+                <option key={pack.id} value={pack.id}>
+                  {pack.shortLabel}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <button
           type="button"
           className="hud-btn btn-kanban"
