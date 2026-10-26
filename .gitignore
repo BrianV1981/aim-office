@@ -4,6 +4,7 @@ dist/
 .vite/
 coverage/
 *.log
+*.tsbuildinfo
 
 # Python / Venv
 venv/
@@ -28,8 +29,8 @@ HANDOFF.md
 AGENTS.md
 TOOLS.md
 aim
-aim.ps1
 aim.cmd
+aim.ps1
 workspace/
 archive/
 planning-artifacts/
