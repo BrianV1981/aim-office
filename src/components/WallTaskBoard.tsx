@@ -3,6 +3,7 @@ import { DEFAULT_PHASE1_KANBAN_TICKETS, KanbanTicketItem } from './WhiteboardMod
 
 export interface WallTaskBoardProps {
   tickets?: KanbanTicketItem[]
+  boardLabel?: string
   lightingMode?: 'day' | 'night'
   onActivate?: () => void
 }
@@ -28,6 +29,7 @@ const COLUMNS: ReadonlyArray<{
 
 export const WallTaskBoard: React.FC<WallTaskBoardProps> = ({
   tickets = DEFAULT_PHASE1_KANBAN_TICKETS,
+  boardLabel = 'PROJECT #14',
   lightingMode = 'day',
   onActivate,
 }) => {
@@ -95,7 +97,9 @@ export const WallTaskBoard: React.FC<WallTaskBoardProps> = ({
             )
           })}
         </div>
-        <div className="wall-task-board-footer">PROJECT #14</div>
+        <div className="wall-task-board-footer" data-testid="wall-task-board-footer">
+          {boardLabel}
+        </div>
         {lightingMode === 'night' && (
           <div className="wall-task-board-night-tint" aria-hidden="true" />
         )}

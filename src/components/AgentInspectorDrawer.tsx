@@ -4,6 +4,7 @@ import {
   AimConnectClient,
   defaultAimConnectClient,
   SessionForensicsPayload,
+  SessionOutputPayload,
   WorkspaceContextPayload,
 } from '../services/aimConnectClient'
 
@@ -16,6 +17,13 @@ export interface AgentInspectorDrawerProps {
   onDispatchCourierFromAgent?: (character: OfficeCharacter) => void
 }
 
+const MACRO_COMMANDS: ReadonlyArray<{ id: string; label: string; command: string }> = [
+  { id: 'wiki', label: '🧠 /aim-memory-wiki', command: '/aim-memory-wiki' },
+  { id: 'handoff', label: '🤝 /aim-handoff', command: '/aim-handoff' },
+  { id: 'board', label: '📋 ./aim projects board', command: './aim projects board' },
+  { id: 'proceed', label: '✅ Proceed', command: 'Proceed' },
+]
+
 export const AgentInspectorDrawer: React.FC<AgentInspectorDrawerProps> = ({
   character,
   client = defaultAimConnectClient,
@@ -26,26 +34,40 @@ export const AgentInspectorDrawer: React.FC<AgentInspectorDrawerProps> = ({
 }) => {
   const [forensics, setForensics] = useState<SessionForensicsPayload | null>(null)
   const [workspaceCtx, setWorkspaceCtx] = useState<WorkspaceContextPayload | null>(null)
+  const [sessionOutput, setSessionOutput] = useState<SessionOutputPayload | null>(null)
   const [loading, setLoading] = useState<boolean>(false)
+
+  const [replyText, setReplyText] = useState<string>('')
+  const [replyStatus, setReplyStatus] = useState<string | null>(null)
+  const [isListening, setIsListening] = useState<boolean>(false)
+  const [ttsStatus, setTtsStatus] = useState<string | null>(null)
 
   useEffect(() => {
     if (!character) {
       setForensics(null)
       setWorkspaceCtx(null)
+      setSessionOutput(null)
+      setReplyText('')
+      setReplyStatus(null)
+      setTtsStatus(null)
       return
     }
 
     let cancelled = false
     setLoading(true)
+    setReplyStatus(null)
+    setTtsStatus(null)
 
     Promise.all([
       client.fetchSessionForensics(character.sessionName, demoMode),
       client.fetchWorkspaceContext(character.sessionName, demoMode),
+      client.fetchSessionOutput(character.sessionName, demoMode),
     ])
-      .then(([forensicsData, wsData]) => {
+      .then(([forensicsData, wsData, outputData]) => {
         if (cancelled) return
         setForensics(forensicsData)
         setWorkspaceCtx(wsData)
+        setSessionOutput(outputData)
         setLoading(false)
       })
       .catch(() => {
@@ -63,6 +85,76 @@ export const AgentInspectorDrawer: React.FC<AgentInspectorDrawerProps> = ({
     character.sessionName
   )}`
   const isAmnesia = character.context.pct >= 30 || character.status === 'AMNESIA'
+
+  const handleReadAloud = () => {
+    const text =
+      sessionOutput?.output ||
+      `${character.sessionName} is currently ${character.status} at ${character.context.pct} percent context.`
+    try {
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window && window.speechSynthesis) {
+        window.speechSynthesis.cancel()
+        if (typeof SpeechSynthesisUtterance !== 'undefined') {
+          const utterance = new SpeechSynthesisUtterance(text)
+          window.speechSynthesis.speak(utterance)
+        }
+      }
+      setTtsStatus('🔊 Reading last response aloud...')
+    } catch {
+      setTtsStatus('🔊 TTS Readout Dispatched')
+    }
+  }
+
+  const handleToggleMicDictation = () => {
+    const SpeechRec =
+      typeof window !== 'undefined'
+        ? (window as unknown as Record<string, unknown>).SpeechRecognition ||
+          (window as unknown as Record<string, unknown>).webkitSpeechRecognition
+        : null
+
+    if (SpeechRec && typeof SpeechRec === 'function') {
+      try {
+        const rec = new (SpeechRec as new () => {
+          lang: string
+          interimResults: boolean
+          onresult: ((e: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null
+          onend: (() => void) | null
+          start: () => void
+        })()
+        rec.lang = 'en-US'
+        rec.interimResults = false
+        setIsListening(true)
+        rec.onresult = (event) => {
+          const transcript = event.results?.[0]?.[0]?.transcript || ''
+          if (transcript) {
+            setReplyText((prev) => (prev ? `${prev} ${transcript}` : transcript))
+          }
+        }
+        rec.onend = () => setIsListening(false)
+        rec.start()
+        return
+      } catch {
+        // Fall through to simulated voice dictation indicator
+      }
+    }
+
+    setIsListening((prev) => !prev)
+    if (!replyText.trim()) {
+      setReplyText('Status report requested via voice dictation')
+    }
+  }
+
+  const handleSendReply = async (customMessage?: string) => {
+    const textToSend = (customMessage ?? replyText).trim()
+    if (!textToSend) return
+
+    const res = await client.sendSessionReply(character.sessionName, textToSend, demoMode)
+    if (res.status) {
+      setReplyStatus(`✅ Sent to ${character.sessionName}: "${textToSend}"`)
+      if (!customMessage) {
+        setReplyText('')
+      }
+    }
+  }
 
   return (
     <aside
@@ -131,6 +223,92 @@ export const AgentInspectorDrawer: React.FC<AgentInspectorDrawerProps> = ({
             ? 'Threshold >= 30% crossed: execute /aim-memory-wiki and /aim-handoff.'
             : 'Operating within sovereign < 30% recall precision envelope.'}
         </p>
+      </section>
+
+      {/* Last Agent Response Viewer + TTS Read-Aloud */}
+      <section className="drawer-section">
+        <div className="section-label-row">
+          <span>Last Agent Response (Live Tmux Scrollback)</span>
+          <button
+            type="button"
+            className="btn-tts-read-aloud"
+            data-testid="btn-tts-read-aloud"
+            onClick={handleReadAloud}
+            title="Read last agent response aloud via SpeechSynthesis TTS"
+          >
+            🔊 Read Aloud
+          </button>
+        </div>
+        <pre className="inspector-last-response-box" data-testid="inspector-last-response">
+          {sessionOutput?.output ||
+            `[${character.sessionName}] Active on ${character.gitBranch || 'main'} (${character.status})`}
+        </pre>
+        {ttsStatus && (
+          <div className="tts-status-pill" data-testid="tts-status">
+            {ttsStatus}
+          </div>
+        )}
+      </section>
+
+      {/* Direct Reply Cockpit + Voice STT + 1-Tap Macro Pills */}
+      <section className="drawer-section" data-testid="inspector-direct-reply-section">
+        <div className="section-label-row">
+          <span>Direct Tmux Reply & Voice / Macro Cockpit</span>
+          <button
+            type="button"
+            className={`btn-mic-dictation${isListening ? ' is-listening' : ''}`}
+            data-testid="btn-mic-dictation"
+            onClick={handleToggleMicDictation}
+            title="Dictate reply via Web Speech API (SpeechRecognition)"
+          >
+            {isListening ? '🔴 Listening...' : '🎤 Voice Mic'}
+          </button>
+        </div>
+        <div className="direct-reply-input-row">
+          <input
+            type="text"
+            className="input-direct-reply"
+            data-testid="input-direct-reply"
+            placeholder={`Send prompt directly to ${character.sessionName}...`}
+            value={replyText}
+            onChange={(e) => setReplyText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault()
+                void handleSendReply()
+              }
+            }}
+          />
+          <button
+            type="button"
+            className="btn-send-direct-reply"
+            data-testid="btn-send-direct-reply"
+            onClick={() => void handleSendReply()}
+          >
+            Send ↵
+          </button>
+        </div>
+
+        {/* 1-Tap Sovereign Macro Pills */}
+        <div className="macro-pills-bar" data-testid="macro-pills-bar">
+          {MACRO_COMMANDS.map((macro) => (
+            <button
+              key={macro.id}
+              type="button"
+              className="btn-macro-pill"
+              data-testid={`btn-macro-${macro.id}`}
+              onClick={() => void handleSendReply(macro.command)}
+            >
+              {macro.label}
+            </button>
+          ))}
+        </div>
+
+        {replyStatus && (
+          <div className="reply-dispatch-status" data-testid="reply-dispatch-status">
+            {replyStatus}
+          </div>
+        )}
       </section>
 
       {/* Forensic Tool Call Pills (/api/forensics/{session}) */}

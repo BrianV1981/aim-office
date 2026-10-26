@@ -948,3 +948,106 @@ body {
   cursor: pointer;
   font-size: 11px;
 }
+
+/* Live Tmux Last Response, TTS, Direct Reply, Mic STT, Macro Pills & AIM-Communicate Broker (#6 & #7) */
+.inspector-last-response-box {
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  max-height: 110px;
+  overflow-y: auto;
+  background: #050811;
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  border-radius: 6px;
+  font-family: monospace;
+  font-size: 10.5px;
+  line-height: 1.4;
+  color: #e2e8f0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.btn-tts-read-aloud,
+.btn-mic-dictation {
+  padding: 3px 8px;
+  border-radius: 5px;
+  font-size: 10.5px;
+  font-weight: 600;
+  background: #1e293b;
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.45);
+  cursor: pointer;
+}
+
+.btn-mic-dictation.is-listening {
+  background: rgba(127, 29, 29, 0.9);
+  color: #fecaca;
+  border-color: var(--accent-red);
+}
+
+.tts-status-pill,
+.reply-dispatch-status,
+.communicate-dispatch-status {
+  margin-top: 6px;
+  padding: 4px 8px;
+  border-radius: 5px;
+  font-size: 10.5px;
+  font-family: monospace;
+  background: rgba(16, 185, 129, 0.14);
+  border: 1px solid rgba(16, 185, 129, 0.4);
+  color: #a7f3d0;
+}
+
+.direct-reply-input-row,
+.communicate-broker-row {
+  margin-top: 8px;
+  display: flex;
+  gap: 6px;
+}
+
+.input-direct-reply,
+.select-communicate-target,
+.input-communicate-instruction {
+  flex: 1;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: #050811;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  color: #f8fafc;
+  font-size: 11.5px;
+  font-family: monospace;
+}
+
+.btn-send-direct-reply,
+.btn-dispatch-communicate {
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: #0284c7;
+  color: #f8fafc;
+  border: 1px solid rgba(56, 189, 248, 0.55);
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.macro-pills-bar {
+  margin-top: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.btn-macro-pill {
+  padding: 3px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-family: monospace;
+  background: rgba(30, 41, 59, 0.9);
+  color: #bae6fd;
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  cursor: pointer;
+}
+
+.btn-macro-pill:hover {
+  background: rgba(2, 132, 199, 0.35);
+}

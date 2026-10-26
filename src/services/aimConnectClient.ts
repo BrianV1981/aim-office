@@ -1,3 +1,4 @@
+import { KanbanTicketItem } from '../components/WhiteboardModal'
 import {
   AgentOperationalStatus,
   ContextGauge,
@@ -16,6 +17,7 @@ export interface FleetPaneRecord {
   isWorktree: boolean
   preview: string
   attached: boolean
+  projectNumber?: number
 }
 
 export interface SwarmDispatchEvent {
@@ -68,19 +70,25 @@ export interface WorkspaceContextPayload {
   worktrees: WorkspaceWorktreeItem[]
 }
 
-/**
- * Compute 30%-Rule Context Severity (`green` < 20%, `amber` 20..29.9%, `red` >= 30%).
- */
+export interface SessionKanbanPayload {
+  session: string
+  projectNumber: number
+  repo: string
+  tickets: KanbanTicketItem[]
+}
+
+export interface SessionOutputPayload {
+  session: string
+  output: string
+  lines: string[]
+}
+
 export function computeContextSeverity(pct: number): ContextSeverity {
   if (pct >= 30) return 'red'
   if (pct >= 20) return 'amber'
   return 'green'
 }
 
-/**
- * Normalize raw vessel string from `aim-connect` (`agy`, `grok`, `opencode`, `codex`, `shell`)
- * into canonical AIM-Office `VesselType`.
- */
 export function normalizeVesselType(
   rawVessel: string | undefined,
   sessionName: string
@@ -102,9 +110,6 @@ export function normalizeVesselType(
   return 'Shell'
 }
 
-/**
- * Normalize raw status string from `aim-connect` into `AgentOperationalStatus`.
- */
 export function normalizeOperationalStatus(
   rawStatus: string | undefined,
   contextPct: number
@@ -131,8 +136,9 @@ export const DEMO_FLEET_PANES: FleetPaneRecord[] = [
     path: '/home/kingb/aim-joshua',
     repoName: 'aim-joshua',
     isWorktree: false,
-    preview: '[DISPATCH] Orchestrating AIM-Office Phase 1 (#1 -> #2 -> #3)',
+    preview: '[DISPATCH] Orchestrating AIM-Office Phase 2 (#5 -> #6 -> #7)',
     attached: true,
+    projectNumber: 1,
   },
   {
     sessionName: 'aim-office',
@@ -143,8 +149,9 @@ export const DEMO_FLEET_PANES: FleetPaneRecord[] = [
     path: '/home/kingb/aim-office/workspace/issue-2',
     repoName: 'aim-office',
     isWorktree: true,
-    preview: '[Vitest] Running telemetry & courier walk tests',
+    preview: '[Vitest] Running cockpit, STT/TTS & Kanban bridge tests',
     attached: true,
+    projectNumber: 14,
   },
   {
     sessionName: 'aim-connect',
@@ -157,6 +164,7 @@ export const DEMO_FLEET_PANES: FleetPaneRecord[] = [
     isWorktree: false,
     preview: 'Serving /api/fleet/panes & /api/swarm/activity on :8000',
     attached: true,
+    projectNumber: 9,
   },
   {
     sessionName: 'aim-auditor',
@@ -167,8 +175,9 @@ export const DEMO_FLEET_PANES: FleetPaneRecord[] = [
     path: '/home/kingb/grok-audit',
     repoName: 'grok-audit',
     isWorktree: false,
-    preview: 'Gatekeeper standing by for Phase 1 closeout audit',
+    preview: 'Gatekeeper standing by for Phase 2 closeout audit',
     attached: false,
+    projectNumber: 14,
   },
   {
     sessionName: 'aim-ld',
@@ -181,6 +190,7 @@ export const DEMO_FLEET_PANES: FleetPaneRecord[] = [
     isWorktree: false,
     preview: '[Bash] pytest tests/test_lead_pipeline.py',
     attached: false,
+    projectNumber: 11,
   },
   {
     sessionName: 'aim-tbsoftwash',
@@ -193,6 +203,7 @@ export const DEMO_FLEET_PANES: FleetPaneRecord[] = [
     isWorktree: false,
     preview: 'Generating regional authority content pipeline',
     attached: false,
+    projectNumber: 12,
   },
   {
     sessionName: 'aim-grok',
@@ -205,6 +216,7 @@ export const DEMO_FLEET_PANES: FleetPaneRecord[] = [
     isWorktree: false,
     preview: '30%-Rule threshold exceeded — preparing /aim-handoff',
     attached: false,
+    projectNumber: 2,
   },
   {
     sessionName: 'aim-codex',
@@ -217,6 +229,7 @@ export const DEMO_FLEET_PANES: FleetPaneRecord[] = [
     isWorktree: false,
     preview: 'Ready at prompt',
     attached: false,
+    projectNumber: 14,
   },
   {
     sessionName: 'aim-opencode',
@@ -229,6 +242,7 @@ export const DEMO_FLEET_PANES: FleetPaneRecord[] = [
     isWorktree: false,
     preview: '[Edit] refactoring schema validators',
     attached: false,
+    projectNumber: 14,
   },
   {
     sessionName: 'aim-skorbane',
@@ -241,6 +255,7 @@ export const DEMO_FLEET_PANES: FleetPaneRecord[] = [
     isWorktree: false,
     preview: 'Idle after content deployment',
     attached: false,
+    projectNumber: 13,
   },
 ]
 
@@ -252,7 +267,7 @@ export const DEMO_SWARM_DISPATCHES: SwarmDispatchEvent[] = [
     recipient: 'aim-office',
     replyTo: 'aim-joshua',
     mtime: 1793037900,
-    preview: '[DISPATCH from aim-joshua] Execute AIM-Office Phase 1 build (#1 -> #2 -> #3)',
+    preview: '[DISPATCH from aim-joshua] Execute AIM-Office Phase 1 & 2 build (#1 -> #7)',
   },
   {
     id: 'demo-report-connect',
@@ -276,9 +291,6 @@ function buildHeaders(apiToken?: string): HeadersInit {
     : { 'Content-Type': 'application/json' }
 }
 
-/**
- * Parse raw JSON response from `GET /api/fleet/panes` into normalized `FleetPaneRecord[]`.
- */
 export function parseFleetPanesResponse(raw: unknown): FleetPaneRecord[] {
   if (!raw || typeof raw !== 'object') return []
   const data = raw as Record<string, unknown>
@@ -324,6 +336,8 @@ export function parseFleetPanesResponse(raw: unknown): FleetPaneRecord[] {
       isWorktree: Boolean(rec.is_worktree),
       preview: String(rec.preview ?? ''),
       attached: Boolean(rec.attached),
+      projectNumber:
+        typeof rec.project_number === 'number' ? rec.project_number : undefined,
     })
   }
 
@@ -333,9 +347,11 @@ export function parseFleetPanesResponse(raw: unknown): FleetPaneRecord[] {
 export class AimConnectClient {
   private readonly baseUrl: string
   private readonly apiToken?: string
+  private readonly hasExplicitBaseUrl: boolean
 
   constructor(options?: { baseUrl?: string; apiToken?: string }) {
     const envUrl = (import.meta.env?.VITE_AIM_CONNECT_URL as string | undefined) || ''
+    this.hasExplicitBaseUrl = Boolean(options?.baseUrl)
     this.baseUrl = (options?.baseUrl ?? envUrl).replace(/\/$/, '')
     this.apiToken = options?.apiToken
   }
@@ -352,7 +368,10 @@ export class AimConnectClient {
       return { panes: DEMO_FLEET_PANES, isDemoFallback: true }
     }
     try {
-      const resp = await fetch(this.url('/api/fleet/panes'), {
+      const endpoint = this.hasExplicitBaseUrl
+        ? this.url('/api/fleet/panes')
+        : '/api/office/fleet'
+      const resp = await fetch(endpoint, {
         headers: buildHeaders(this.apiToken),
       })
       if (!resp.ok) {
@@ -397,6 +416,207 @@ export class AimConnectClient {
     } catch {
       return DEMO_SWARM_DISPATCHES
     }
+  }
+
+  async fetchSessionKanban(
+    sessionName: string,
+    forceDemo = false
+  ): Promise<SessionKanbanPayload> {
+    if (!forceDemo) {
+      try {
+        const resp = await fetch(
+          `/api/office/kanban?session=${encodeURIComponent(sessionName)}`,
+          { headers: buildHeaders(this.apiToken) }
+        )
+        if (resp.ok) {
+          const json = (await resp.json()) as Record<string, unknown>
+          const rawTickets = Array.isArray(json.tickets) ? json.tickets : []
+          if (rawTickets.length > 0) {
+            return {
+              session: String(json.session ?? sessionName),
+              projectNumber: Number(json.projectNumber ?? 14),
+              repo: String(json.repo ?? `BrianV1981/${sessionName}`),
+              tickets: rawTickets.map((t: Record<string, unknown>, i: number) => ({
+                id: String(t.id ?? `ticket-${i + 1}`),
+                number: Number(t.number ?? i + 1),
+                title: String(t.title ?? `Ticket #${i + 1}`),
+                status:
+                  t.status === 'Done' || t.status === 'In Progress' ? t.status : 'Todo',
+                assignee: String(t.assignee ?? sessionName),
+              })),
+            }
+          }
+        }
+      } catch {
+        // Fall through to deterministic per-session demo project board
+      }
+    }
+
+    const demoPane = DEMO_FLEET_PANES.find((p) => p.sessionName === sessionName)
+    const projectNumber = demoPane?.projectNumber ?? 14
+    const repo = `BrianV1981/${demoPane?.repoName ?? sessionName}`
+
+    if (sessionName !== 'aim-office' && sessionName !== 'aim-joshua') {
+      return {
+        session: sessionName,
+        projectNumber,
+        repo,
+        tickets: [
+          {
+            id: `${sessionName}-1`,
+            number: 101,
+            title: `feat(${sessionName}): core pipeline telemetry & autonomous execution`,
+            status: 'Done',
+            assignee: sessionName,
+          },
+          {
+            id: `${sessionName}-2`,
+            number: 102,
+            title: `feat(${sessionName}): live memory-wiki sync & 30%-Rule handoff guard`,
+            status: 'In Progress',
+            assignee: sessionName,
+          },
+          {
+            id: `${sessionName}-3`,
+            number: 103,
+            title: `chore(${sessionName}): closeout verification & audit report`,
+            status: 'Todo',
+            assignee: sessionName,
+          },
+        ],
+      }
+    }
+
+    return {
+      session: sessionName,
+      projectNumber: 14,
+      repo: 'BrianV1981/aim-office',
+      tickets: [
+        {
+          id: 'ticket-1',
+          number: 1,
+          title: 'feat(engine): scaffold React 19 + TS isometric 2.5D stage & Python 2x2 sprite slicer',
+          status: 'Done',
+          assignee: 'aim-office',
+        },
+        {
+          id: 'ticket-4',
+          number: 4,
+          title: 'fix(layout): 1376x768 4-way standing desk quad pods & skewY wall TaskBoard',
+          status: 'Done',
+          assignee: 'aim-office',
+        },
+        {
+          id: 'ticket-5',
+          number: 5,
+          title: 'feat(floor): elastic 11-to-32 agent dynamic pod layout, pan/zoom camera & 20-character roster',
+          status: 'Done',
+          assignee: 'aim-office',
+        },
+        {
+          id: 'ticket-6',
+          number: 6,
+          title: 'feat(cockpit): live local tmux & per-project GitHub Kanban bridge + last response, direct reply, Mic STT & TTS',
+          status: 'In Progress',
+          assignee: 'aim-office',
+        },
+        {
+          id: 'ticket-7',
+          number: 7,
+          title: 'feat(communicate): 1-click aim-communicate broker dropdown on agent cards with physical courier walks',
+          status: 'Todo',
+          assignee: 'aim-office',
+        },
+      ],
+    }
+  }
+
+  async fetchSessionOutput(
+    sessionName: string,
+    forceDemo = false
+  ): Promise<SessionOutputPayload> {
+    if (!forceDemo) {
+      try {
+        const resp = await fetch(
+          `/api/office/session/${encodeURIComponent(sessionName)}/output`,
+          { headers: buildHeaders(this.apiToken) }
+        )
+        if (resp.ok) {
+          const json = (await resp.json()) as Record<string, unknown>
+          return {
+            session: sessionName,
+            output: String(json.output ?? ''),
+            lines: Array.isArray(json.lines) ? (json.lines as string[]) : [],
+          }
+        }
+      } catch {
+        // Fall through to demo output
+      }
+    }
+
+    const demoRecord = DEMO_FLEET_PANES.find((p) => p.sessionName === sessionName)
+    const text = `[${sessionName}] (${demoRecord?.vessel ?? 'AGY'} · branch ${
+      demoRecord?.branch ?? 'main'
+    })\n${demoRecord?.preview ?? 'Active agent session standing by at prompt.'}`
+    return {
+      session: sessionName,
+      output: text,
+      lines: text.split('\n'),
+    }
+  }
+
+  async sendSessionReply(
+    sessionName: string,
+    message: string,
+    forceDemo = false
+  ): Promise<{ status: string; session: string; message: string }> {
+    const trimmed = message.trim()
+    if (!forceDemo) {
+      try {
+        const resp = await fetch(
+          `/api/office/session/${encodeURIComponent(sessionName)}/reply`,
+          {
+            method: 'POST',
+            headers: buildHeaders(this.apiToken),
+            body: JSON.stringify({ message: trimmed }),
+          }
+        )
+        if (resp.ok) {
+          return { status: 'sent', session: sessionName, message: trimmed }
+        }
+      } catch {
+        // Fall through to simulated reply
+      }
+    }
+    return { status: 'simulated', session: sessionName, message: trimmed }
+  }
+
+  async dispatchAimCommunicate(
+    fromSession: string,
+    toSession: string,
+    instruction: string,
+    forceDemo = false
+  ): Promise<{ status: string; prompt: string }> {
+    const prompt = `Please use your aim-communicate skill to send a message to tmux session ${toSession} (declare FROM: ${fromSession} and REPLY_TO: ${fromSession}) with this directive/question: ${instruction.trim()}`
+    if (!forceDemo) {
+      try {
+        const resp = await fetch('/api/office/communicate', {
+          method: 'POST',
+          headers: buildHeaders(this.apiToken),
+          body: JSON.stringify({ fromSession, toSession, instruction: instruction.trim() }),
+        })
+        if (resp.ok) {
+          const json = (await resp.json()) as Record<string, unknown>
+          return {
+            status: String(json.status ?? 'dispatched'),
+            prompt: String(json.prompt ?? prompt),
+          }
+        }
+      } catch {
+        // Fall through to simulated dispatch
+      }
+    }
+    return { status: 'simulated', prompt }
   }
 
   async fetchSessionForensics(

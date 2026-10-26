@@ -4,10 +4,14 @@ import { describe, expect, it, vi } from 'vitest'
 import { TopCommandBar } from '../src/components/TopCommandBar'
 import { AgentInspectorDrawer } from '../src/components/AgentInspectorDrawer'
 import { WhiteboardModal } from '../src/components/WhiteboardModal'
-import { DEMO_FLEET_PANES, DEMO_SWARM_DISPATCHES } from '../src/services/aimConnectClient'
+import {
+  DEMO_FLEET_PANES,
+  DEMO_SWARM_DISPATCHES,
+  defaultAimConnectClient,
+} from '../src/services/aimConnectClient'
 import { mapFleetToOfficeCharacters } from '../src/office/useOfficeDirector'
 
-describe('AIM-Office HUD Command Bar, Forensic Inspector Drawer & Kanban Modal (#3 & #4)', () => {
+describe('AIM-Office HUD Command Bar, Forensic Inspector Drawer & Kanban Modal (#3, #4, #6)', () => {
   const sampleCharacters = mapFleetToOfficeCharacters(DEMO_FLEET_PANES)
 
   it('renders TopCommandBar with active agent count, 30%-Rule health summary, and interactive toggles', () => {
@@ -49,7 +53,7 @@ describe('AIM-Office HUD Command Bar, Forensic Inspector Drawer & Kanban Modal (
     expect(onOpenWhiteboard).toHaveBeenCalledTimes(1)
   })
 
-  it('populates AgentInspectorDrawer with session telemetry, forensic tool pills, git branch/wiki delta, and AIM-Connect terminal link', async () => {
+  it('populates AgentInspectorDrawer with session telemetry, last response viewer, TTS, direct reply, Mic STT, Macro pills, and forensic pills', async () => {
     const officeChar = sampleCharacters.find((c) => c.sessionName === 'aim-office')!
     const onClose = vi.fn()
 
@@ -66,6 +70,32 @@ describe('AIM-Office HUD Command Bar, Forensic Inspector Drawer & Kanban Modal (
 
     await waitFor(() => {
       expect(screen.getByTestId('inspector-forensic-pills')).toHaveTextContent('[Bash]')
+      expect(screen.getByTestId('inspector-last-response')).toHaveTextContent('[aim-office]')
+    })
+
+    // Trigger TTS Read-Aloud
+    fireEvent.click(screen.getByTestId('btn-tts-read-aloud'))
+    expect(screen.getByTestId('tts-status')).toHaveTextContent('🔊')
+
+    // Trigger Mic Dictation fallback
+    fireEvent.click(screen.getByTestId('btn-mic-dictation'))
+    const replyInput = screen.getByTestId('input-direct-reply') as HTMLInputElement
+    expect(replyInput.value).toContain('voice dictation')
+
+    // Send direct reply
+    fireEvent.change(replyInput, { target: { value: 'Run unit tests now' } })
+    fireEvent.click(screen.getByTestId('btn-send-direct-reply'))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('reply-dispatch-status')).toHaveTextContent(
+        'Sent to aim-office: "Run unit tests now"'
+      )
+    })
+
+    // Trigger 1-tap macro pill
+    fireEvent.click(screen.getByTestId('btn-macro-wiki'))
+    await waitFor(() => {
+      expect(screen.getByTestId('reply-dispatch-status')).toHaveTextContent('/aim-memory-wiki')
     })
 
     expect(screen.getByTestId('inspector-git-branch')).toHaveTextContent('fix/issue-2')
@@ -75,13 +105,17 @@ describe('AIM-Office HUD Command Bar, Forensic Inspector Drawer & Kanban Modal (
     expect(terminalLink.href).toContain('http://localhost:8000/?session=aim-office')
   })
 
-  it('renders WhiteboardModal with Todo / In Progress / Done Kanban columns and aim-communicate Swarm Activity feed', () => {
+  it('switches Kanban board per project (e.g. aim-ld -> Project #11) and renders WhiteboardModal columns', async () => {
+    const ldKanban = await defaultAimConnectClient.fetchSessionKanban('aim-ld', true)
+    expect(ldKanban.projectNumber).toBe(11)
+
     const onClose = vi.fn()
     const onReplay = vi.fn()
 
     render(
       <WhiteboardModal
         isOpen={true}
+        boardLabel={`PROJECT #${ldKanban.projectNumber} (${ldKanban.session})`}
         swarmDispatches={DEMO_SWARM_DISPATCHES}
         onClose={onClose}
         onReplayDispatchWalk={onReplay}
@@ -89,6 +123,7 @@ describe('AIM-Office HUD Command Bar, Forensic Inspector Drawer & Kanban Modal (
     )
 
     expect(screen.getByTestId('whiteboard-modal')).toBeInTheDocument()
+    expect(screen.getByTestId('whiteboard-modal-title')).toHaveTextContent('PROJECT #11 (aim-ld)')
     expect(screen.getByTestId('kanban-col-done')).toHaveTextContent('#1')
     expect(screen.getByTestId('kanban-col-done')).toHaveTextContent('#2')
     expect(screen.getByTestId('kanban-col-done')).toHaveTextContent('#3')

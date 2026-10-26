@@ -12,6 +12,7 @@ export interface KanbanTicketItem {
 export interface WhiteboardModalProps {
   isOpen: boolean
   tickets?: KanbanTicketItem[]
+  boardLabel?: string
   swarmDispatches: SwarmDispatchEvent[]
   onClose: () => void
   onReplayDispatchWalk?: (dispatch: SwarmDispatchEvent) => void
@@ -51,6 +52,7 @@ export const DEFAULT_PHASE1_KANBAN_TICKETS: KanbanTicketItem[] = [
 export const WhiteboardModal: React.FC<WhiteboardModalProps> = ({
   isOpen,
   tickets = DEFAULT_PHASE1_KANBAN_TICKETS,
+  boardLabel = 'GitHub Project #14 — AIM-Office',
   swarmDispatches,
   onClose,
   onReplayDispatchWalk,
@@ -74,7 +76,9 @@ export const WhiteboardModal: React.FC<WhiteboardModalProps> = ({
       >
         <div className="whiteboard-modal-header">
           <div>
-            <h2>📋 GitHub Project #14 — AIM-Office Kanban Board & Swarm Feed</h2>
+            <h2 data-testid="whiteboard-modal-title">
+              📋 {boardLabel} Kanban Board & Swarm Feed
+            </h2>
             <p className="whiteboard-subtitle">
               Live GitOps Worktree Status (`./aim projects board`) & `aim-communicate` Dispatches
             </p>

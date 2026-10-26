@@ -18,6 +18,7 @@ export interface OfficeStageProps {
   room?: IsometricRoom
   characters: OfficeCharacter[]
   tickets?: KanbanTicketItem[]
+  boardLabel?: string
   lightingMode?: 'day' | 'night'
   selectedSession?: string | null
   onSelectCharacter?: (character: OfficeCharacter) => void
@@ -31,6 +32,7 @@ export const OfficeStage: React.FC<OfficeStageProps> = ({
   room = COMMAND_OFFICE_ROOM,
   characters,
   tickets,
+  boardLabel,
   lightingMode = 'day',
   selectedSession = null,
   onSelectCharacter,
@@ -258,6 +260,7 @@ export const OfficeStage: React.FC<OfficeStageProps> = ({
         {/* Layer 1.5: Perspective-Skewed Wall TaskBoard on the painted Whiteboard */}
         <WallTaskBoard
           tickets={tickets}
+          boardLabel={boardLabel}
           lightingMode={lightingMode}
           onActivate={handleActivateWallBoard}
         />
