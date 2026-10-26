@@ -10,6 +10,7 @@ export interface TopCommandBarProps {
   demoMode: boolean
   isFallbackActive: boolean
   activeThemeId?: ThemePackId
+  boardLabel?: string
   onSelectTheme?: (themeId: ThemePackId) => void
   onToggleLighting: () => void
   onTriggerCourierDemo: () => void
@@ -25,6 +26,7 @@ export const TopCommandBar: React.FC<TopCommandBarProps> = ({
   demoMode,
   isFallbackActive,
   activeThemeId = 'sovereign-war-room',
+  boardLabel,
   onSelectTheme,
   onToggleLighting,
   onTriggerCourierDemo,
@@ -128,8 +130,9 @@ export const TopCommandBar: React.FC<TopCommandBarProps> = ({
           className="hud-btn btn-kanban"
           data-testid="btn-open-whiteboard"
           onClick={onOpenWhiteboard}
+          title={boardLabel ? `Open ${boardLabel} Kanban Whiteboard` : 'Open Kanban Whiteboard'}
         >
-          📋 Kanban Whiteboard
+          📋 Kanban{boardLabel ? ` · ${boardLabel}` : ' Whiteboard'}
         </button>
         <button
           type="button"

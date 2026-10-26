@@ -138,7 +138,7 @@ export const DEMO_FLEET_PANES: FleetPaneRecord[] = [
     isWorktree: false,
     preview: '[DISPATCH] Orchestrating AIM-Office Phase 2 (#5 -> #6 -> #7)',
     attached: true,
-    projectNumber: 1,
+    projectNumber: 7,
   },
   {
     sessionName: 'aim-office',
@@ -164,7 +164,7 @@ export const DEMO_FLEET_PANES: FleetPaneRecord[] = [
     isWorktree: false,
     preview: 'Serving /api/fleet/panes & /api/swarm/activity on :8000',
     attached: true,
-    projectNumber: 9,
+    projectNumber: 6,
   },
   {
     sessionName: 'aim-auditor',
@@ -177,7 +177,7 @@ export const DEMO_FLEET_PANES: FleetPaneRecord[] = [
     isWorktree: false,
     preview: 'Gatekeeper standing by for Phase 2 closeout audit',
     attached: false,
-    projectNumber: 14,
+    projectNumber: 22,
   },
   {
     sessionName: 'aim-ld',
@@ -190,7 +190,7 @@ export const DEMO_FLEET_PANES: FleetPaneRecord[] = [
     isWorktree: false,
     preview: '[Bash] pytest tests/test_lead_pipeline.py',
     attached: false,
-    projectNumber: 11,
+    projectNumber: 5,
   },
   {
     sessionName: 'aim-tbsoftwash',
@@ -203,7 +203,7 @@ export const DEMO_FLEET_PANES: FleetPaneRecord[] = [
     isWorktree: false,
     preview: 'Generating regional authority content pipeline',
     attached: false,
-    projectNumber: 12,
+    projectNumber: 15,
   },
   {
     sessionName: 'aim-grok',
@@ -229,7 +229,7 @@ export const DEMO_FLEET_PANES: FleetPaneRecord[] = [
     isWorktree: false,
     preview: 'Ready at prompt',
     attached: false,
-    projectNumber: 14,
+    projectNumber: 11,
   },
   {
     sessionName: 'aim-opencode',
@@ -242,7 +242,7 @@ export const DEMO_FLEET_PANES: FleetPaneRecord[] = [
     isWorktree: false,
     preview: '[Edit] refactoring schema validators',
     attached: false,
-    projectNumber: 14,
+    projectNumber: 9,
   },
   {
     sessionName: 'aim-skorbane',
@@ -255,7 +255,7 @@ export const DEMO_FLEET_PANES: FleetPaneRecord[] = [
     isWorktree: false,
     preview: 'Idle after content deployment',
     attached: false,
-    projectNumber: 13,
+    projectNumber: 17,
   },
 ]
 
@@ -456,7 +456,7 @@ export class AimConnectClient {
     const projectNumber = demoPane?.projectNumber ?? 14
     const repo = `BrianV1981/${demoPane?.repoName ?? sessionName}`
 
-    if (sessionName !== 'aim-office' && sessionName !== 'aim-joshua') {
+    if (sessionName !== 'aim-office') {
       return {
         session: sessionName,
         projectNumber,
@@ -464,21 +464,21 @@ export class AimConnectClient {
         tickets: [
           {
             id: `${sessionName}-1`,
-            number: 101,
+            number: projectNumber * 10 + 1,
             title: `feat(${sessionName}): core pipeline telemetry & autonomous execution`,
             status: 'Done',
             assignee: sessionName,
           },
           {
             id: `${sessionName}-2`,
-            number: 102,
+            number: projectNumber * 10 + 2,
             title: `feat(${sessionName}): live memory-wiki sync & 30%-Rule handoff guard`,
             status: 'In Progress',
             assignee: sessionName,
           },
           {
             id: `${sessionName}-3`,
-            number: 103,
+            number: projectNumber * 10 + 3,
             title: `chore(${sessionName}): closeout verification & audit report`,
             status: 'Todo',
             assignee: sessionName,
