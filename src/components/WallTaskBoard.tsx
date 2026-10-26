@@ -78,18 +78,24 @@ export const WallTaskBoard: React.FC<WallTaskBoardProps> = ({
         }}
       >
         <div className="wall-task-board-surface" />
+        <div className="wall-task-board-header" data-testid="wall-task-board-header">
+          {boardLabel}
+        </div>
         <div className="wall-task-board-columns">
           {COLUMNS.map((col) => {
             const colTickets = tickets.filter((t) => t.status === col.status)
+            const visibleNotes = colTickets.slice(0, 6)
             return (
               <div
                 key={col.status}
                 className="wall-task-col"
                 data-testid={`wall-col-${col.status.toLowerCase().replace(/\s+/g, '-')}`}
               >
-                <div className="wall-task-col-title">{col.title}</div>
+                <div className="wall-task-col-title">
+                  {col.title} ({colTickets.length})
+                </div>
                 <div className="wall-task-col-notes">
-                  {colTickets.map((ticket) => (
+                  {visibleNotes.map((ticket) => (
                     <span
                       key={ticket.id}
                       data-testid={`wall-note-${ticket.number}`}
@@ -97,7 +103,9 @@ export const WallTaskBoard: React.FC<WallTaskBoardProps> = ({
                       aria-label={`#${ticket.number}: ${ticket.title}`}
                       onMouseEnter={() => setHoveredTicketId(ticket.id)}
                       onMouseLeave={() => setHoveredTicketId(null)}
-                    />
+                    >
+                      <span className="wall-task-note-num">#{ticket.number}</span>
+                    </span>
                   ))}
                 </div>
               </div>
@@ -118,8 +126,8 @@ export const WallTaskBoard: React.FC<WallTaskBoardProps> = ({
           data-testid="wall-task-board-tooltip"
           style={{
             position: 'absolute',
-            left: `${WALL_BOARD_RECT.left + WALL_BOARD_RECT.width / 2}%`,
-            top: `${WALL_BOARD_RECT.top - 1.5}%`,
+            left: `${rect.left + rect.width / 2}%`,
+            top: `${rect.top - 1.5}%`,
             transform: 'translate(-50%, -100%)',
             zIndex: 950,
           }}

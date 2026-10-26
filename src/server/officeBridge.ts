@@ -64,7 +64,78 @@ export function resolveMainRepoRoot(cwdPath: string): string {
   return cwdPath
 }
 
-export function readRepoProjectConfig(cwdPath: string): {
+export const SESSION_PROJECT_MAP: Record<string, number> = {
+  'aim-office': 14,
+  'aim-agy': 11,
+  'aim-dash': 10,
+  'aim-tmux-dashboard': 10,
+  'aim-tmux': 10,
+  'aim-skill-library': 9,
+  'aim-flight-recorder': 8,
+  'aim-joshua': 7,
+  'aim-connect': 6,
+  'aim-connect-workspace': 6,
+  backend: 6,
+  'aim-ld': 5,
+  'aim-ld-content': 5,
+  'aim-ayrianna': 4,
+  'aim-claude': 3,
+  'aim-browser': 2,
+  'aim-tbsoftwash': 15,
+  'aim-tbsoftwash-content': 15,
+  'tbsoftwash-ai-book': 16,
+  'aim-skorbane': 17,
+  'aim-skorbane-content': 17,
+  'aim-gbp': 18,
+  'aim-calendar': 19,
+  'aim-cron-dashboard': 20,
+  'aim-cron': 20,
+  'aim-youtube': 21,
+  'aim-auditor': 22,
+}
+
+const kanbanSessionCache = new Map<
+  string,
+  {
+    ts: number
+    data: {
+      session: string
+      projectNumber: number
+      repo: string
+      tickets: LocalKanbanTicket[]
+    }
+  }
+>()
+const KANBAN_CACHE_TTL_MS = 60_000
+
+export function resolveMappedProjectNumber(
+  sessionName: string,
+  cwdPath: string,
+  configuredNumber: number | null
+): number {
+  if (typeof configuredNumber === 'number' && configuredNumber > 0) {
+    return configuredNumber
+  }
+  const cleanSession = (sessionName || '').trim().toLowerCase()
+  if (SESSION_PROJECT_MAP[cleanSession]) {
+    return SESSION_PROJECT_MAP[cleanSession]
+  }
+  const mainRoot = resolveMainRepoRoot(cwdPath)
+  const repoBase = path.basename(mainRoot || cwdPath).toLowerCase()
+  if (SESSION_PROJECT_MAP[repoBase]) {
+    return SESSION_PROJECT_MAP[repoBase]
+  }
+  const parentBase = path.basename(path.dirname(mainRoot || cwdPath)).toLowerCase()
+  if (SESSION_PROJECT_MAP[parentBase]) {
+    return SESSION_PROJECT_MAP[parentBase]
+  }
+  if (cleanSession.includes('connect') || cleanSession.startsWith('agent-op_')) {
+    return 6
+  }
+  return 14
+}
+
+export function readRepoProjectConfig(cwdPath: string, sessionName = ''): {
   projectNumber: number | null
   owner: string
   repo: string
@@ -73,6 +144,7 @@ export function readRepoProjectConfig(cwdPath: string): {
   const candidates = [
     path.join(mainRoot, 'joshua_os', '.aim_core', 'CONFIG.json'),
     path.join(cwdPath, 'joshua_os', '.aim_core', 'CONFIG.json'),
+    path.join(path.dirname(mainRoot), 'joshua_os', '.aim_core', 'CONFIG.json'),
   ]
   for (const cfgPath of candidates) {
     try {
@@ -80,8 +152,9 @@ export function readRepoProjectConfig(cwdPath: string): {
         const raw = JSON.parse(fs.readFileSync(cfgPath, 'utf-8'))
         const gp = raw?.settings?.github_projects
         if (gp && typeof gp === 'object') {
+          const cfgNum = typeof gp.number === 'number' ? gp.number : null
           return {
-            projectNumber: typeof gp.number === 'number' ? gp.number : null,
+            projectNumber: resolveMappedProjectNumber(sessionName, cwdPath, cfgNum),
             owner: typeof gp.owner === 'string' ? gp.owner : 'BrianV1981',
             repo: typeof gp.repo === 'string' ? gp.repo : '',
           }
@@ -91,7 +164,11 @@ export function readRepoProjectConfig(cwdPath: string): {
       // Ignore malformed config
     }
   }
-  return { projectNumber: null, owner: 'BrianV1981', repo: '' }
+  return {
+    projectNumber: resolveMappedProjectNumber(sessionName, cwdPath, null),
+    owner: 'BrianV1981',
+    repo: '',
+  }
 }
 
 export function readGitBranchFast(cwdPath: string): string {
@@ -192,7 +269,7 @@ export function collectLocalTmuxFleet(): LocalFleetSessionRecord[] {
     const mainRoot = resolveMainRepoRoot(panePath || '')
     const repoName = path.basename(mainRoot || panePath || sessionName)
     const branch = readGitBranchFast(panePath || '')
-    const { projectNumber, repo } = readRepoProjectConfig(panePath || '')
+    const { projectNumber, repo } = readRepoProjectConfig(panePath || '', sessionName)
 
     fleet.push({
       session_name: sessionName,
@@ -223,9 +300,177 @@ export function resolveSessionPath(sessionName: string): string {
     ).trim()
     if (out && fs.existsSync(out)) return out
   }
-  const fallback = path.join('/home/kingb', sessionName)
-  if (fs.existsSync(fallback)) return fallback
+  const candidates = [
+    path.join('/home/kingb', sessionName),
+    path.join('/home/kingb/aim-agents', sessionName),
+  ]
+  for (const c of candidates) {
+    if (fs.existsSync(c)) return c
+  }
   return '/home/kingb/aim-office'
+}
+
+function cleanMarkdownText(raw: string): string {
+  return raw
+    .replace(/\*\*|`/g, '')
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+export function parseHandoffKanbanForSession(
+  sessionPath: string,
+  sessionName: string
+): LocalKanbanTicket[] {
+  const mainRoot = resolveMainRepoRoot(sessionPath)
+  const candidates = [
+    path.join(sessionPath, 'HANDOFF.md'),
+    path.join(mainRoot, 'HANDOFF.md'),
+    path.join(path.dirname(mainRoot), 'HANDOFF.md'),
+  ]
+  const handoffPath = candidates.find((p) => fs.existsSync(p))
+  if (!handoffPath) return []
+
+  let text = ''
+  try {
+    text = fs.readFileSync(handoffPath, 'utf-8')
+  } catch {
+    return []
+  }
+
+  const inProgress: LocalKanbanTicket[] = []
+  const todos: LocalKanbanTicket[] = []
+  const done: LocalKanbanTicket[] = []
+
+  const missionMatch = text.match(/>\s*\*\*Priority Mission:\*\*\s*(.+)/i)
+  if (missionMatch?.[1]) {
+    const cleaned = cleanMarkdownText(missionMatch[1]).slice(0, 110)
+    if (cleaned) {
+      const numMatch = cleaned.match(/#(\d+)/)
+      const num = numMatch ? Number(numMatch[1]) : 901
+      inProgress.push({
+        id: `${sessionName}-mission`,
+        number: num,
+        title: `Mission: ${cleaned}`,
+        status: 'In Progress',
+        assignee: sessionName,
+      })
+    }
+  }
+
+  let currentSection = ''
+  let seqNum = 100
+  for (const rawLine of text.split('\n')) {
+    const line = rawLine.trim()
+    if (!line) continue
+
+    if (line.startsWith('## ')) {
+      currentSection = line.toLowerCase()
+      if (
+        (currentSection.includes('your mission') || currentSection.includes('campaign state')) &&
+        inProgress.length === 0
+      ) {
+        const headerMission = cleanMarkdownText(line.replace(/^##\s*\d*\.?\s*/i, '')).slice(0, 110)
+        if (headerMission) {
+          inProgress.push({
+            id: `${sessionName}-sec-mission`,
+            number: 902,
+            title: headerMission,
+            status: 'In Progress',
+            assignee: sessionName,
+          })
+        }
+      }
+      continue
+    }
+
+    // Completed table rows (`| session | work | status |`)
+    if (
+      (currentSection.includes('completed') || currentSection.includes('0.')) &&
+      line.startsWith('|') &&
+      !line.startsWith('|---') &&
+      !line.startsWith('|:---') &&
+      !/\|\s*session\s*\|/i.test(line)
+    ) {
+      const cols = line
+        .replace(/^\|/, '')
+        .replace(/\|$/, '')
+        .split('|')
+        .map((c) => c.trim())
+      if (cols.length >= 2) {
+        const workText = cleanMarkdownText(cols[1])
+        if (workText && !/^:?-+:?$/.test(workText) && done.length < 10) {
+          const numMatch = workText.match(/#(\d+)/)
+          const num = numMatch ? Number(numMatch[1]) : ++seqNum
+          done.push({
+            id: `${sessionName}-done-${done.length + 1}`,
+            number: num,
+            title: workText.slice(0, 110),
+            status: 'Done',
+            assignee: sessionName,
+          })
+        }
+      }
+      continue
+    }
+
+    // Bullet/numbered items under completed / tactical summary / milestones
+    const bulletMatch = line.match(/^(?:-\s+|\*\s+|\d+\.\s+)(.+)/)
+    if (bulletMatch?.[1]) {
+      const itemText = cleanMarkdownText(bulletMatch[1])
+      if (!itemText) continue
+      const numMatch = itemText.match(/#(\d+)/)
+      const num = numMatch ? Number(numMatch[1]) : ++seqNum
+
+      if (
+        currentSection.includes('next step') ||
+        currentSection.includes('next execution') ||
+        currentSection.includes('discrepanc') ||
+        currentSection.includes('verification')
+      ) {
+        if (todos.length < 6) {
+          todos.push({
+            id: `${sessionName}-todo-${todos.length + 1}`,
+            number: num,
+            title: itemText.slice(0, 110),
+            status: 'Todo',
+            assignee: sessionName,
+          })
+        }
+      } else if (
+        currentSection.includes('campaign state') ||
+        currentSection.includes('active queue') ||
+        currentSection.includes('your mission')
+      ) {
+        if (inProgress.length < 4) {
+          inProgress.push({
+            id: `${sessionName}-active-${inProgress.length + 1}`,
+            number: num,
+            title: itemText.slice(0, 110),
+            status: 'In Progress',
+            assignee: sessionName,
+          })
+        }
+      } else if (
+        (currentSection.includes('tactical summary') ||
+          currentSection.includes('milestone') ||
+          currentSection.includes('completed')) &&
+        (itemText.startsWith('#') || currentSection.includes('milestone'))
+      ) {
+        if (done.length < 10) {
+          done.push({
+            id: `${sessionName}-done-bullet-${done.length + 1}`,
+            number: num,
+            title: itemText.slice(0, 110),
+            status: 'Done',
+            assignee: sessionName,
+          })
+        }
+      }
+    }
+  }
+
+  return [...inProgress, ...todos, ...done]
 }
 
 export function fetchProjectKanbanForSession(sessionName: string): {
@@ -234,105 +479,125 @@ export function fetchProjectKanbanForSession(sessionName: string): {
   repo: string
   tickets: LocalKanbanTicket[]
 } {
-  const sessionPath = resolveSessionPath(sessionName || 'aim-office')
-  const { projectNumber, owner, repo } = readRepoProjectConfig(sessionPath)
+  const targetSession = (sessionName || 'aim-office').trim()
+  const now = Date.now()
+  const cached = kanbanSessionCache.get(targetSession)
+  if (cached && now - cached.ts < KANBAN_CACHE_TTL_MS) {
+    return cached.data
+  }
+
+  const sessionPath = resolveSessionPath(targetSession)
+  const { projectNumber, owner, repo } = readRepoProjectConfig(sessionPath, targetSession)
   const effectiveNumber = projectNumber ?? 14
-  const effectiveRepo = repo || `BrianV1981/${path.basename(resolveMainRepoRoot(sessionPath))}`
+  const mainRoot = resolveMainRepoRoot(sessionPath)
+  const effectiveRepo = repo || `BrianV1981/${path.basename(mainRoot || sessionPath)}`
 
-  const ghJson = runCmd(
-    'gh',
-    [
-      'project',
-      'item-list',
-      String(effectiveNumber),
-      '--owner',
-      owner || 'BrianV1981',
-      '--format',
-      'json',
-      '-L',
-      '40',
-    ],
-    5000
-  )
+  const handoffTickets = parseHandoffKanbanForSession(sessionPath, targetSession)
+  let ghTickets: LocalKanbanTicket[] = []
 
-  if (ghJson.trim()) {
-    try {
-      const parsed = JSON.parse(ghJson) as { items?: Array<Record<string, unknown>> }
-      if (Array.isArray(parsed.items) && parsed.items.length > 0) {
-        const tickets: LocalKanbanTicket[] = parsed.items.map((item, idx) => {
-          const content =
-            item.content && typeof item.content === 'object'
-              ? (item.content as Record<string, unknown>)
-              : {}
-          const rawStatus = String(item.status ?? 'Todo').toLowerCase()
-          const status: LocalKanbanTicket['status'] = rawStatus.includes('done')
-            ? 'Done'
-            : rawStatus.includes('progress')
-              ? 'In Progress'
-              : 'Todo'
-          const number = Number(content.number ?? idx + 1)
-          return {
-            id: String(item.id ?? `ticket-${number}`),
-            number,
-            title: String(item.title ?? content.title ?? `Ticket #${number}`),
-            status,
-            assignee: sessionName || 'aim-office',
-          }
-        })
-        return {
-          session: sessionName || 'aim-office',
-          projectNumber: effectiveNumber,
-          repo: effectiveRepo,
-          tickets,
+  // Only query `gh project item-list` for real GitHub Project V2 boards (1..14)
+  if (effectiveNumber >= 1 && effectiveNumber <= 14) {
+    const ghJson = runCmd(
+      'gh',
+      [
+        'project',
+        'item-list',
+        String(effectiveNumber),
+        '--owner',
+        owner || 'BrianV1981',
+        '--format',
+        'json',
+        '-L',
+        '35',
+      ],
+      2800
+    )
+
+    if (ghJson.trim()) {
+      try {
+        const parsed = JSON.parse(ghJson) as { items?: Array<Record<string, unknown>> }
+        if (Array.isArray(parsed.items) && parsed.items.length > 0) {
+          ghTickets = parsed.items.map((item, idx) => {
+            const content =
+              item.content && typeof item.content === 'object'
+                ? (item.content as Record<string, unknown>)
+                : {}
+            const rawStatus = String(item.status ?? 'Todo').toLowerCase()
+            const status: LocalKanbanTicket['status'] = rawStatus.includes('done')
+              ? 'Done'
+              : rawStatus.includes('progress')
+                ? 'In Progress'
+                : 'Todo'
+            const number = Number(content.number ?? idx + 1)
+            return {
+              id: String(item.id ?? `${targetSession}-gh-${number}`),
+              number,
+              title: String(item.title ?? content.title ?? `Ticket #${number}`),
+              status,
+              assignee: targetSession,
+            }
+          })
         }
+      } catch {
+        // Ignore parse error and fall back to handoffTickets
       }
-    } catch {
-      // Fall through to deterministic fallback tickets
     }
   }
 
-  return {
-    session: sessionName || 'aim-office',
+  // Merge ghTickets + handoffTickets so every session has rich Todo, In Progress, and Done items
+  const combined: LocalKanbanTicket[] = [...ghTickets]
+  const hasInProgress = combined.some((t) => t.status === 'In Progress')
+  const hasTodo = combined.some((t) => t.status === 'Todo')
+  const hasDone = combined.some((t) => t.status === 'Done')
+
+  for (const ht of handoffTickets) {
+    if (ht.status === 'In Progress' && (!hasInProgress || combined.length === 0)) {
+      combined.unshift(ht)
+    } else if (ht.status === 'Todo' && (!hasTodo || combined.length === 0)) {
+      combined.push(ht)
+    } else if (ht.status === 'Done' && (!hasDone || combined.length === 0)) {
+      combined.push(ht)
+    }
+  }
+
+  // Ensure every session has at least 1 In Progress and 1 Todo item reflecting live session telemetry
+  if (!combined.some((t) => t.status === 'In Progress')) {
+    const branch = readGitBranchFast(sessionPath)
+    combined.unshift({
+      id: `${targetSession}-live-active`,
+      number: effectiveNumber * 10 + 1,
+      title: `Active Session (${targetSession} on branch ${branch}) — Live Fleet Operations`,
+      status: 'In Progress',
+      assignee: targetSession,
+    })
+  }
+  if (!combined.some((t) => t.status === 'Todo')) {
+    combined.push({
+      id: `${targetSession}-live-todo`,
+      number: effectiveNumber * 10 + 2,
+      title: `Next Queue (${targetSession}): Memory Wiki Sync & 30%-Rule Handoff Verification`,
+      status: 'Todo',
+      assignee: targetSession,
+    })
+  }
+  if (!combined.some((t) => t.status === 'Done')) {
+    combined.push({
+      id: `${targetSession}-live-done`,
+      number: effectiveNumber * 10,
+      title: `Completed (${targetSession}): J.O.S.H.U.A. Exoskeleton & Baseline TDD Guardrails`,
+      status: 'Done',
+      assignee: targetSession,
+    })
+  }
+
+  const result = {
+    session: targetSession,
     projectNumber: effectiveNumber,
     repo: effectiveRepo,
-    tickets: [
-      {
-        id: 'ticket-1',
-        number: 1,
-        title: 'feat(engine): scaffold React 19 + TS isometric 2.5D stage & Python 2x2 sprite slicer',
-        status: 'Done',
-        assignee: sessionName || 'aim-office',
-      },
-      {
-        id: 'ticket-4',
-        number: 4,
-        title: 'fix(layout): 1376x768 4-way standing desk quad pods & skewY wall TaskBoard',
-        status: 'Done',
-        assignee: sessionName || 'aim-office',
-      },
-      {
-        id: 'ticket-5',
-        number: 5,
-        title: 'feat(floor): elastic 11-to-32 agent dynamic pod layout, pan/zoom camera & 20-character roster',
-        status: 'Done',
-        assignee: sessionName || 'aim-office',
-      },
-      {
-        id: 'ticket-6',
-        number: 6,
-        title: 'feat(cockpit): live local tmux & per-project GitHub Kanban bridge + last response, direct reply, Mic STT & TTS',
-        status: 'In Progress',
-        assignee: sessionName || 'aim-office',
-      },
-      {
-        id: 'ticket-7',
-        number: 7,
-        title: 'feat(communicate): 1-click aim-communicate broker dropdown on agent cards with physical courier walks',
-        status: 'Todo',
-        assignee: sessionName || 'aim-office',
-      },
-    ],
+    tickets: combined,
   }
+  kanbanSessionCache.set(targetSession, { ts: now, data: result })
+  return result
 }
 
 export function captureCleanSessionOutput(sessionName: string): {

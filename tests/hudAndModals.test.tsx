@@ -3,7 +3,9 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { TopCommandBar } from '../src/components/TopCommandBar'
 import { AgentInspectorDrawer } from '../src/components/AgentInspectorDrawer'
+import { WallTaskBoard } from '../src/components/WallTaskBoard'
 import { WhiteboardModal } from '../src/components/WhiteboardModal'
+import { resolveMappedProjectNumber } from '../src/server/officeBridge'
 import {
   DEMO_FLEET_PANES,
   DEMO_SWARM_DISPATCHES,
@@ -156,29 +158,72 @@ describe('AIM-Office HUD Command Bar, Forensic Inspector Drawer & Kanban Modal (
     })
   })
 
-  it('switches Kanban board per project (e.g. aim-ld -> Project #11) and renders WhiteboardModal columns', async () => {
+  it('switches Kanban board per project (e.g. aim-ld -> Project #5, aim-joshua -> Project #7) and updates WallTaskBoard & WhiteboardModal (#10)', async () => {
+    expect(resolveMappedProjectNumber('aim-office', '/home/kingb/aim-office', null)).toBe(14)
+    expect(resolveMappedProjectNumber('aim-joshua', '/home/kingb/aim-joshua', null)).toBe(7)
+    expect(resolveMappedProjectNumber('aim-connect', '/home/kingb/aim-connect', null)).toBe(6)
+    expect(resolveMappedProjectNumber('aim-ld', '/home/kingb/aim-ld', null)).toBe(5)
+    expect(resolveMappedProjectNumber('aim-tbsoftwash', '/home/kingb/aim-tbsoftwash', null)).toBe(15)
+    expect(resolveMappedProjectNumber('aim-skorbane', '/home/kingb/aim-skorbane', null)).toBe(17)
+
     const ldKanban = await defaultAimConnectClient.fetchSessionKanban('aim-ld', true)
-    expect(ldKanban.projectNumber).toBe(11)
+    const joshuaKanban = await defaultAimConnectClient.fetchSessionKanban('aim-joshua', true)
+    expect(ldKanban.projectNumber).toBe(5)
+    expect(joshuaKanban.projectNumber).toBe(7)
+    expect(ldKanban.tickets[0].number).not.toBe(joshuaKanban.tickets[0].number)
 
     const onClose = vi.fn()
     const onReplay = vi.fn()
 
-    render(
-      <WhiteboardModal
-        isOpen={true}
-        boardLabel={`PROJECT #${ldKanban.projectNumber} (${ldKanban.session})`}
-        swarmDispatches={DEMO_SWARM_DISPATCHES}
-        onClose={onClose}
-        onReplayDispatchWalk={onReplay}
-      />
+    const { rerender } = render(
+      <>
+        <WallTaskBoard
+          boardLabel={`PROJECT #${ldKanban.projectNumber} (${ldKanban.session})`}
+          tickets={ldKanban.tickets}
+        />
+        <WhiteboardModal
+          isOpen={true}
+          boardLabel={`PROJECT #${ldKanban.projectNumber} (${ldKanban.session})`}
+          tickets={ldKanban.tickets}
+          swarmDispatches={DEMO_SWARM_DISPATCHES}
+          onClose={onClose}
+          onReplayDispatchWalk={onReplay}
+        />
+      </>
     )
 
+    expect(screen.getByTestId('wall-task-board-header')).toHaveTextContent('PROJECT #5 (aim-ld)')
     expect(screen.getByTestId('whiteboard-modal')).toBeInTheDocument()
-    expect(screen.getByTestId('whiteboard-modal-title')).toHaveTextContent('PROJECT #11 (aim-ld)')
-    expect(screen.getByTestId('kanban-col-done')).toHaveTextContent('#1')
-    expect(screen.getByTestId('kanban-col-done')).toHaveTextContent('#2')
-    expect(screen.getByTestId('kanban-col-done')).toHaveTextContent('#3')
-    expect(screen.getByTestId('kanban-col-in-progress')).toHaveTextContent('#4')
+    expect(screen.getByTestId('whiteboard-modal-title')).toHaveTextContent('PROJECT #5 (aim-ld)')
+    expect(screen.getByTestId('kanban-col-done')).toHaveTextContent('#51')
+    expect(screen.getByTestId('kanban-col-in-progress')).toHaveTextContent('#52')
+    expect(screen.getByTestId('kanban-col-todo')).toHaveTextContent('#53')
     expect(screen.getByTestId('swarm-activity-feed')).toHaveTextContent('aim-joshua')
+
+    // Simulate clicking aim-joshua -> WallTaskBoard & WhiteboardModal update to Project #7
+    rerender(
+      <>
+        <WallTaskBoard
+          boardLabel={`PROJECT #${joshuaKanban.projectNumber} (${joshuaKanban.session})`}
+          tickets={joshuaKanban.tickets}
+        />
+        <WhiteboardModal
+          isOpen={true}
+          boardLabel={`PROJECT #${joshuaKanban.projectNumber} (${joshuaKanban.session})`}
+          tickets={joshuaKanban.tickets}
+          swarmDispatches={DEMO_SWARM_DISPATCHES}
+          onClose={onClose}
+          onReplayDispatchWalk={onReplay}
+        />
+      </>
+    )
+
+    expect(screen.getByTestId('wall-task-board-header')).toHaveTextContent(
+      'PROJECT #7 (aim-joshua)'
+    )
+    expect(screen.getByTestId('whiteboard-modal-title')).toHaveTextContent(
+      'PROJECT #7 (aim-joshua)'
+    )
+    expect(screen.getByTestId('kanban-col-done')).toHaveTextContent('#71')
   })
 })
