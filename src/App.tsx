@@ -114,6 +114,7 @@ export const App: React.FC = () => {
 
         <AgentInspectorDrawer
           character={selectedCharacter}
+          allCharacters={characters}
           client={client}
           demoMode={demoMode || isFallbackActive}
           onClose={() => setSelectedSession(null)}
@@ -124,6 +125,7 @@ export const App: React.FC = () => {
               preview: `[REPORT from ${char.sessionName}] Status sync -> aim-joshua`,
             })
           }
+          onDispatchAimCommunicate={(dispatch) => triggerCourierWalk(dispatch)}
         />
       </div>
 

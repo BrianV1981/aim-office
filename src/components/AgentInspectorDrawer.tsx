@@ -10,11 +10,17 @@ import {
 
 export interface AgentInspectorDrawerProps {
   character: OfficeCharacter | null
+  allCharacters?: OfficeCharacter[]
   client?: AimConnectClient
   demoMode?: boolean
   aimConnectBaseUrl?: string
   onClose: () => void
   onDispatchCourierFromAgent?: (character: OfficeCharacter) => void
+  onDispatchAimCommunicate?: (dispatch: {
+    sender: string
+    recipient: string
+    preview: string
+  }) => void
 }
 
 const MACRO_COMMANDS: ReadonlyArray<{ id: string; label: string; command: string }> = [
@@ -26,11 +32,13 @@ const MACRO_COMMANDS: ReadonlyArray<{ id: string; label: string; command: string
 
 export const AgentInspectorDrawer: React.FC<AgentInspectorDrawerProps> = ({
   character,
+  allCharacters = [],
   client = defaultAimConnectClient,
   demoMode = false,
   aimConnectBaseUrl = 'http://localhost:8000',
   onClose,
   onDispatchCourierFromAgent,
+  onDispatchAimCommunicate,
 }) => {
   const [forensics, setForensics] = useState<SessionForensicsPayload | null>(null)
   const [workspaceCtx, setWorkspaceCtx] = useState<WorkspaceContextPayload | null>(null)
@@ -42,6 +50,10 @@ export const AgentInspectorDrawer: React.FC<AgentInspectorDrawerProps> = ({
   const [isListening, setIsListening] = useState<boolean>(false)
   const [ttsStatus, setTtsStatus] = useState<string | null>(null)
 
+  const [targetSession, setTargetSession] = useState<string>('aim-joshua')
+  const [communicateInstruction, setCommunicateInstruction] = useState<string>('')
+  const [communicateStatus, setCommunicateStatus] = useState<string | null>(null)
+
   useEffect(() => {
     if (!character) {
       setForensics(null)
@@ -50,8 +62,15 @@ export const AgentInspectorDrawer: React.FC<AgentInspectorDrawerProps> = ({
       setReplyText('')
       setReplyStatus(null)
       setTtsStatus(null)
+      setCommunicateInstruction('')
+      setCommunicateStatus(null)
       return
     }
+
+    const defaultTarget =
+      character.sessionName === 'aim-joshua' ? 'aim-office' : 'aim-joshua'
+    setTargetSession(defaultTarget)
+    setCommunicateStatus(null)
 
     let cancelled = false
     setLoading(true)
@@ -153,6 +172,43 @@ export const AgentInspectorDrawer: React.FC<AgentInspectorDrawerProps> = ({
       if (!customMessage) {
         setReplyText('')
       }
+    }
+  }
+
+  const peerSessions = Array.from(
+    new Set([
+      ...allCharacters.map((c) => c.sessionName),
+      'aim-joshua',
+      'aim-office',
+      'aim-connect',
+      'aim-grok',
+      'aim-ld',
+    ])
+  ).filter((s) => s !== character.sessionName)
+
+  const handleDispatchCommunicate = async () => {
+    const instruction =
+      communicateInstruction.trim() ||
+      `Sync status and report latest GitOps milestone to ${targetSession}`
+    const recipient = targetSession || peerSessions[0] || 'aim-joshua'
+
+    const res = await client.dispatchAimCommunicate(
+      character.sessionName,
+      recipient,
+      instruction,
+      demoMode
+    )
+    if (res.status) {
+      const preview = `[DISPATCH ${character.sessionName} -> ${recipient}] ${instruction}`
+      setCommunicateStatus(
+        `📡 Dispatched aim-communicate: ${character.sessionName} → ${recipient}`
+      )
+      setCommunicateInstruction('')
+      onDispatchAimCommunicate?.({
+        sender: character.sessionName,
+        recipient,
+        preview,
+      })
     }
   }
 
@@ -307,6 +363,61 @@ export const AgentInspectorDrawer: React.FC<AgentInspectorDrawerProps> = ({
         {replyStatus && (
           <div className="reply-dispatch-status" data-testid="reply-dispatch-status">
             {replyStatus}
+          </div>
+        )}
+      </section>
+
+      {/* 1-Click AIM-Communicate Broker Dropdown + Physical Courier Walk Trigger (#7) */}
+      <section className="drawer-section" data-testid="inspector-communicate-broker">
+        <div className="section-label-row">
+          <span>📡 1-Click `aim-communicate` Broker</span>
+          <span className="muted-count">Courier Walk + Tmux Skill</span>
+        </div>
+        <div className="communicate-broker-row">
+          <select
+            className="select-communicate-target"
+            data-testid="select-communicate-target"
+            aria-label="Target Agent Session"
+            value={targetSession}
+            onChange={(e) => setTargetSession(e.target.value)}
+          >
+            {peerSessions.map((peer) => (
+              <option key={peer} value={peer}>
+                → {peer}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="communicate-broker-row">
+          <input
+            type="text"
+            className="input-communicate-instruction"
+            data-testid="input-communicate-instruction"
+            placeholder={`Directive for ${character.sessionName} to send ${targetSession}...`}
+            value={communicateInstruction}
+            onChange={(e) => setCommunicateInstruction(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault()
+                void handleDispatchCommunicate()
+              }
+            }}
+          />
+          <button
+            type="button"
+            className="btn-dispatch-communicate"
+            data-testid="btn-dispatch-communicate"
+            onClick={() => void handleDispatchCommunicate()}
+          >
+            🚶 Dispatch
+          </button>
+        </div>
+        {communicateStatus && (
+          <div
+            className="communicate-dispatch-status"
+            data-testid="communicate-dispatch-status"
+          >
+            {communicateStatus}
           </div>
         )}
       </section>

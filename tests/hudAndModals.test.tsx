@@ -105,6 +105,47 @@ describe('AIM-Office HUD Command Bar, Forensic Inspector Drawer & Kanban Modal (
     expect(terminalLink.href).toContain('http://localhost:8000/?session=aim-office')
   })
 
+  it('dispatches 1-click aim-communicate broker instructions and triggers physical courier walk (#7)', async () => {
+    const officeChar = sampleCharacters.find((c) => c.sessionName === 'aim-office')!
+    const onClose = vi.fn()
+    const onDispatchAimCommunicate = vi.fn()
+
+    render(
+      <AgentInspectorDrawer
+        character={officeChar}
+        allCharacters={sampleCharacters}
+        demoMode={true}
+        onClose={onClose}
+        onDispatchAimCommunicate={onDispatchAimCommunicate}
+      />
+    )
+
+    const targetSelect = screen.getByTestId('select-communicate-target') as HTMLSelectElement
+    fireEvent.change(targetSelect, { target: { value: 'aim-ld' } })
+
+    const instructionInput = screen.getByTestId(
+      'input-communicate-instruction'
+    ) as HTMLInputElement
+    fireEvent.change(instructionInput, {
+      target: { value: 'Verify LeadDeeds Project #11 Kanban board sync' },
+    })
+
+    fireEvent.click(screen.getByTestId('btn-dispatch-communicate'))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('communicate-dispatch-status')).toHaveTextContent(
+        'aim-office → aim-ld'
+      )
+    })
+
+    expect(onDispatchAimCommunicate).toHaveBeenCalledWith({
+      sender: 'aim-office',
+      recipient: 'aim-ld',
+      preview:
+        '[DISPATCH aim-office -> aim-ld] Verify LeadDeeds Project #11 Kanban board sync',
+    })
+  })
+
   it('switches Kanban board per project (e.g. aim-ld -> Project #11) and renders WhiteboardModal columns', async () => {
     const ldKanban = await defaultAimConnectClient.fetchSessionKanban('aim-ld', true)
     expect(ldKanban.projectNumber).toBe(11)
