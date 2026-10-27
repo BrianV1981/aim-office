@@ -483,9 +483,16 @@ export const AgentStaffRoster: React.FC<AgentStaffRosterProps> = ({
                 <img
                   src={`/sprites/characters/${char.archetype}-front-left.png`}
                   alt={char.displayName}
-                  width={32}
                   height={42}
-                  style={{ imageRendering: 'pixelated' }}
+                  className="staff-avatar-img"
+                  style={{
+                    height: '42px',
+                    width: 'auto',
+                    maxWidth: '100%',
+                    objectFit: 'contain',
+                    imageRendering: 'pixelated',
+                    display: 'block',
+                  }}
                   onError={(e) => {
                     ;(e.currentTarget as HTMLImageElement).style.display = 'none'
                   }}

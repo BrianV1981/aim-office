@@ -813,10 +813,21 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 4px 6px;
+  justify-content: center;
+  min-width: 52px;
+  padding: 5px 8px;
   background: #090d16;
   border: 1px solid rgba(56, 189, 248, 0.3);
-  border-radius: 6px;
+  border-radius: 8px;
+}
+
+.inspector-avatar-img,
+.staff-avatar-img {
+  width: auto;
+  max-width: 100%;
+  object-fit: contain;
+  image-rendering: pixelated;
+  display: block;
 }
 
 .drawer-archetype-slug {
@@ -970,48 +981,86 @@ body {
 .whiteboard-modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(2, 6, 23, 0.8);
+  background: rgba(2, 6, 23, 0.82);
+  backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 2000;
-  padding: 20px;
+  padding: 24px;
 }
 
 .whiteboard-modal-card {
-  width: 100%;
-  max-width: 960px;
-  background: #0f172a;
-  border: 1px solid var(--border-cyan);
-  border-radius: 12px;
-  padding: 18px;
+  width: min(860px, calc(100vw - 48px));
+  max-width: 860px;
+  max-height: min(660px, calc(100vh - 64px));
+  overflow: hidden;
+  background: rgba(15, 23, 42, 0.98);
+  border: 1.5px solid var(--border-cyan);
+  border-radius: 14px;
+  padding: 16px 18px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.85);
+  gap: 14px;
+  box-shadow:
+    0 24px 64px rgba(0, 0, 0, 0.9),
+    0 0 28px rgba(56, 189, 248, 0.2);
 }
 
 .whiteboard-modal-header {
+  flex-shrink: 0;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(56, 189, 248, 0.25);
 }
 
 .whiteboard-modal-header h2 {
   margin: 0;
-  font-size: 18px;
+  font-size: 16.5px;
 }
 
 .whiteboard-subtitle {
-  margin: 4px 0 0;
-  font-size: 12px;
+  margin: 3px 0 0;
+  font-size: 11.5px;
   color: var(--text-muted);
+}
+
+.whiteboard-close-btn {
+  flex-shrink: 0;
+  padding: 6px 12px;
+  border-radius: 7px;
+  background: rgba(239, 68, 68, 0.2);
+  border: 1px solid rgba(239, 68, 68, 0.65);
+  color: #fecaca;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.whiteboard-close-btn:hover {
+  background: rgba(239, 68, 68, 0.38);
+  color: #ffffff;
+}
+
+.whiteboard-modal-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding-right: 4px;
 }
 
 .kanban-columns-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 12px;
+  min-height: 0;
 }
 
 .kanban-column {
@@ -1019,9 +1068,13 @@ body {
   border: 1px solid rgba(148, 163, 184, 0.25);
   border-radius: 8px;
   padding: 10px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 .kanban-column-header {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1040,6 +1093,9 @@ body {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  max-height: 280px;
+  overflow-y: auto;
+  padding-right: 3px;
 }
 
 .kanban-ticket-card {
@@ -1059,15 +1115,22 @@ body {
   margin-bottom: 4px;
 }
 
+.swarm-activity-section {
+  flex-shrink: 0;
+}
+
 .swarm-activity-section h3 {
   margin: 0 0 8px;
-  font-size: 14px;
+  font-size: 13.5px;
 }
 
 .swarm-dispatch-list {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  max-height: 115px;
+  overflow-y: auto;
+  padding-right: 3px;
 }
 
 .swarm-dispatch-row {
@@ -1417,8 +1480,9 @@ body {
 
 .staff-row-avatar {
   flex-shrink: 0;
-  width: 34px;
-  height: 38px;
+  width: 38px;
+  height: 46px;
+  padding: 2px;
   display: flex;
   align-items: center;
   justify-content: center;

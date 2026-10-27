@@ -280,9 +280,16 @@ export const AgentInspectorDrawer: React.FC<AgentInspectorDrawerProps> = ({
             <img
               src={`/sprites/characters/${character.archetype}-front-left.png`}
               alt={character.displayName}
-              width={40}
-              height={52}
-              style={{ imageRendering: 'pixelated' }}
+              height={56}
+              className="inspector-avatar-img"
+              style={{
+                height: '56px',
+                width: 'auto',
+                maxWidth: '100%',
+                objectFit: 'contain',
+                imageRendering: 'pixelated',
+                display: 'block',
+              }}
               onError={(e) => {
                 ;(e.currentTarget as HTMLImageElement).style.display = 'none'
               }}

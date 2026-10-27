@@ -231,6 +231,15 @@ describe('AIM-Office HUD Command Bar, Forensic Inspector Drawer & Kanban Modal (
       'PROJECT #7 (aim-joshua)'
     )
     expect(screen.getByTestId('kanban-col-done')).toHaveTextContent('#71')
+    expect(screen.getByTestId('whiteboard-modal-body')).toBeInTheDocument()
+
+    // Verify Escape key closes WhiteboardModal (#12)
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(onClose).toHaveBeenCalledTimes(1)
+
+    // Verify Close Board button closes WhiteboardModal (#12)
+    fireEvent.click(screen.getByTestId('btn-close-whiteboard'))
+    expect(onClose).toHaveBeenCalledTimes(2)
   })
 
   it('renders AgentStaffRoster with all 20 Sovereign staff personas, search filter, status filter pills, and 1-click agent selection (#11)', () => {

@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect } from 'react'
 import { SwarmDispatchEvent } from '../services/aimConnectClient'
 
 export interface KanbanTicketItem {
@@ -57,6 +57,17 @@ export const WhiteboardModal: React.FC<WhiteboardModalProps> = ({
   onClose,
   onReplayDispatchWalk,
 }) => {
+  useEffect(() => {
+    if (!isOpen) return
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose()
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [isOpen, onClose])
+
   if (!isOpen) return null
 
   const columns: Array<'Todo' | 'In Progress' | 'Done'> = ['Todo', 'In Progress', 'Done']
@@ -85,73 +96,76 @@ export const WhiteboardModal: React.FC<WhiteboardModalProps> = ({
           </div>
           <button
             type="button"
-            className="drawer-close-btn"
+            className="whiteboard-close-btn"
             data-testid="btn-close-whiteboard"
             onClick={onClose}
+            title="Close Kanban Whiteboard (Esc)"
           >
-            ✕
+            ✕ Close Board
           </button>
         </div>
 
-        {/* 3-Column Kanban Board */}
-        <div className="kanban-columns-grid" data-testid="kanban-columns-grid">
-          {columns.map((colStatus) => {
-            const items = tickets.filter((t) => t.status === colStatus)
-            return (
-              <div
-                key={colStatus}
-                className="kanban-column"
-                data-testid={`kanban-col-${colStatus.toLowerCase().replace(/\s+/g, '-')}`}
-              >
-                <div className="kanban-column-header">
-                  <strong>{colStatus}</strong>
-                  <span className="kanban-count-badge">{items.length}</span>
-                </div>
-                <div className="kanban-cards-list">
-                  {items.map((item) => (
-                    <div key={item.id} className="kanban-ticket-card">
-                      <div className="ticket-meta-row">
-                        <span className="ticket-number">#{item.number}</span>
-                        <span className="ticket-assignee">{item.assignee}</span>
+        <div className="whiteboard-modal-body" data-testid="whiteboard-modal-body">
+          {/* 3-Column Kanban Board */}
+          <div className="kanban-columns-grid" data-testid="kanban-columns-grid">
+            {columns.map((colStatus) => {
+              const items = tickets.filter((t) => t.status === colStatus)
+              return (
+                <div
+                  key={colStatus}
+                  className="kanban-column"
+                  data-testid={`kanban-col-${colStatus.toLowerCase().replace(/\s+/g, '-')}`}
+                >
+                  <div className="kanban-column-header">
+                    <strong>{colStatus}</strong>
+                    <span className="kanban-count-badge">{items.length}</span>
+                  </div>
+                  <div className="kanban-cards-list">
+                    {items.map((item) => (
+                      <div key={item.id} className="kanban-ticket-card">
+                        <div className="ticket-meta-row">
+                          <span className="ticket-number">#{item.number}</span>
+                          <span className="ticket-assignee">{item.assignee}</span>
+                        </div>
+                        <div className="ticket-title">{item.title}</div>
                       </div>
-                      <div className="ticket-title">{item.title}</div>
-                    </div>
-                  ))}
-                  {items.length === 0 && (
-                    <div className="kanban-empty-slot">No tickets in {colStatus}</div>
+                    ))}
+                    {items.length === 0 && (
+                      <div className="kanban-empty-slot">No tickets in {colStatus}</div>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+
+          {/* Live aim-communicate Swarm Activity Feed */}
+          <div className="swarm-activity-section" data-testid="swarm-activity-feed">
+            <h3>📨 Recent `aim-communicate` Swarm Dispatches</h3>
+            <div className="swarm-dispatch-list">
+              {swarmDispatches.map((d) => (
+                <div key={d.id} className="swarm-dispatch-row">
+                  <div className="dispatch-route-pill">
+                    <code>{d.sender}</code>
+                    <span>→</span>
+                    <code>{d.recipient}</code>
+                  </div>
+                  <div className="dispatch-preview-text">{d.preview}</div>
+                  {onReplayDispatchWalk && (
+                    <button
+                      type="button"
+                      className="btn-replay-walk"
+                      onClick={() => {
+                        onReplayDispatchWalk(d)
+                        onClose()
+                      }}
+                    >
+                      🚶 Replay Walk
+                    </button>
                   )}
                 </div>
-              </div>
-            )
-          })}
-        </div>
-
-        {/* Live aim-communicate Swarm Activity Feed */}
-        <div className="swarm-activity-section" data-testid="swarm-activity-feed">
-          <h3>📨 Recent `aim-communicate` Swarm Dispatches</h3>
-          <div className="swarm-dispatch-list">
-            {swarmDispatches.map((d) => (
-              <div key={d.id} className="swarm-dispatch-row">
-                <div className="dispatch-route-pill">
-                  <code>{d.sender}</code>
-                  <span>→</span>
-                  <code>{d.recipient}</code>
-                </div>
-                <div className="dispatch-preview-text">{d.preview}</div>
-                {onReplayDispatchWalk && (
-                  <button
-                    type="button"
-                    className="btn-replay-walk"
-                    onClick={() => {
-                      onReplayDispatchWalk(d)
-                      onClose()
-                    }}
-                  >
-                    🚶 Replay Walk
-                  </button>
-                )}
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         </div>
       </div>
