@@ -17,6 +17,14 @@ import {
   stepAlongWaypoints,
 } from '../src/office/waypointGraph'
 import { OfficeStage } from '../src/components/OfficeStage'
+import {
+  addCatalogPropToLayout,
+  applyCustomLayoutToRoom,
+  collectRoomHangoutSpots,
+  removePlacedPropFromLayout,
+  resetThemeLayout,
+  updateFurniturePositionInLayout,
+} from '../src/office/layoutPersistence'
 import { OfficeCharacter, SOVEREIGN_CHARACTER_ROSTER } from '../src/office/types'
 
 describe('AIM-Office Isometric 2.5D Engine, Elastic 4-Way Quad Pods, Pan/Zoom & Waypoints (#1, #4, #5)', () => {
@@ -303,5 +311,75 @@ describe('AIM-Office Isometric 2.5D Engine, Elastic 4-Way Quad Pods, Pan/Zoom & 
     expect(CUTAWAY_AGENCY_POD_CENTERS[2]).toMatchObject({ cx: 75.5, cy: 59.5 })
     expect(CUTAWAY_AGENCY_POD_CENTERS[3]).toMatchObject({ cx: 70.0, cy: 83.5 })
     expect(CUTAWAY_AGENCY_POD_CENTERS[4]).toMatchObject({ cx: 28.5, cy: 72.0 })
+  })
+
+  it('supports Build Mode desk dragging, workstation translation, and Smart Furniture Catalog placement (#17)', () => {
+    const origDesk1 = COMMAND_OFFICE_ROOM.furniture.find((f) => f.id === 'desk-1')!
+    const origBossSpot = COMMAND_OFFICE_ROOM.workstations.find((w) => w.id === 'spot-boss')!
+
+    let layoutMap = updateFurniturePositionInLayout(
+      {},
+      'classic-command',
+      'desk-1',
+      origDesk1.x + 10,
+      origDesk1.y + 8
+    )
+
+    const { nextMap, addedProp } = addCatalogPropToLayout(
+      layoutMap,
+      'classic-command',
+      'prop-lounge-couch',
+      { x: 30, y: 78 }
+    )
+    layoutMap = nextMap
+    expect(addedProp).not.toBeNull()
+
+    const customized = applyCustomLayoutToRoom(
+      COMMAND_OFFICE_ROOM,
+      'classic-command',
+      layoutMap
+    )
+    const movedDesk1 = customized.furniture.find((f) => f.id === 'desk-1')!
+    const movedBossSpot = customized.workstations.find((w) => w.id === 'spot-boss')!
+
+    expect(movedDesk1.x).toBeCloseTo(origDesk1.x + 10, 1)
+    expect(movedDesk1.y).toBeCloseTo(origDesk1.y + 8, 1)
+    expect(movedBossSpot.x).toBeCloseTo(origBossSpot.x + 10, 1)
+    expect(movedBossSpot.y).toBeCloseTo(origBossSpot.y + 8, 1)
+
+    const placedCouch = customized.furniture.find((f) => f.id === addedProp!.id)!
+    expect(placedCouch.isUserPlaced).toBe(true)
+    expect(placedCouch.hangoutSpots).toHaveLength(3)
+    expect(placedCouch.hangoutSpots![0].isSeated).toBe(true)
+
+    const allHangouts = collectRoomHangoutSpots(customized)
+    expect(allHangouts.length).toBeGreaterThanOrEqual(10)
+
+    const onMoveFurniture = vi.fn()
+    render(
+      <OfficeStage
+        room={customized}
+        characters={[]}
+        isBuildMode={true}
+        selectedFurnitureId={addedProp!.id}
+        onMoveFurniture={onMoveFurniture}
+      />
+    )
+
+    const couchEl = screen.getByTestId(`furniture-${addedProp!.id}`)
+    fireEvent.mouseDown(couchEl, { button: 0, clientX: 200, clientY: 200 })
+    fireEvent.mouseMove(window, { clientX: 337, clientY: 276 })
+    fireEvent.mouseUp(window)
+    expect(onMoveFurniture).toHaveBeenCalledWith(
+      addedProp!.id,
+      expect.any(Number),
+      expect.any(Number)
+    )
+
+    layoutMap = removePlacedPropFromLayout(layoutMap, 'classic-command', addedProp!.id)
+    expect(layoutMap['classic-command']?.placedProps).toHaveLength(0)
+
+    layoutMap = resetThemeLayout(layoutMap, 'classic-command')
+    expect(layoutMap['classic-command']).toBeUndefined()
   })
 })

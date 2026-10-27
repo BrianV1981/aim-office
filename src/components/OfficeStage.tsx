@@ -27,8 +27,11 @@ export interface OfficeStageProps {
   wallBoardRect?: WallBoardRectConfig | null
   lightingMode?: 'day' | 'night'
   selectedSession?: string | null
+  selectedFurnitureId?: string | null
+  isBuildMode?: boolean
   onSelectCharacter?: (character: OfficeCharacter) => void
   onSelectFurniture?: (furniture: FurnitureAsset) => void
+  onMoveFurniture?: (furnitureId: string, x: number, y: number) => void
   onOpenWhiteboard?: () => void
   onCharactersTick?: (updated: OfficeCharacter[]) => void
   walkSpeedPctPerSec?: number
@@ -42,8 +45,11 @@ export const OfficeStage: React.FC<OfficeStageProps> = ({
   wallBoardRect,
   lightingMode = 'day',
   selectedSession = null,
+  selectedFurnitureId = null,
+  isBuildMode = false,
   onSelectCharacter,
   onSelectFurniture,
+  onMoveFurniture,
   onOpenWhiteboard,
   onCharactersTick,
   walkSpeedPctPerSec = 22,
@@ -52,9 +58,45 @@ export const OfficeStage: React.FC<OfficeStageProps> = ({
   const [zoom, setZoom] = useState<number>(1)
   const [pan, setPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 })
   const [isDragging, setIsDragging] = useState<boolean>(false)
+  const cameraPlaneRef = useRef<HTMLDivElement | null>(null)
   const dragOriginRef = useRef<{ startX: number; startY: number; panX: number; panY: number } | null>(
     null
   )
+  const furnitureDragRef = useRef<{
+    id: string
+    startClientX: number
+    startClientY: number
+    origX: number
+    origY: number
+  } | null>(null)
+
+  useEffect(() => {
+    if (!isBuildMode) {
+      furnitureDragRef.current = null
+      return
+    }
+    const handleWinMove = (e: MouseEvent) => {
+      const drag = furnitureDragRef.current
+      if (!drag || !onMoveFurniture) return
+      const rect = cameraPlaneRef.current?.getBoundingClientRect()
+      const planeW = rect && rect.width > 10 ? rect.width : 1376
+      const planeH = rect && rect.height > 10 ? rect.height : 768
+      const dxPct = ((e.clientX - drag.startClientX) / planeW) * 100
+      const dyPct = ((e.clientY - drag.startClientY) / planeH) * 100
+      const nextX = Math.round(Math.min(94, Math.max(6, drag.origX + dxPct)) * 10) / 10
+      const nextY = Math.round(Math.min(94, Math.max(12, drag.origY + dyPct)) * 10) / 10
+      onMoveFurniture(drag.id, nextX, nextY)
+    }
+    const handleWinUp = () => {
+      furnitureDragRef.current = null
+    }
+    window.addEventListener('mousemove', handleWinMove)
+    window.addEventListener('mouseup', handleWinUp)
+    return () => {
+      window.removeEventListener('mousemove', handleWinMove)
+      window.removeEventListener('mouseup', handleWinUp)
+    }
+  }, [isBuildMode, onMoveFurniture])
 
   const elasticRoom = useMemo(
     () => filterRoomForAgentCount(room, characters.length),
@@ -233,6 +275,7 @@ export const OfficeStage: React.FC<OfficeStageProps> = ({
 
       {/* Pan & Zoom Camera Transform Plane (Edge-to-Edge Responsive 16:9 Stage) */}
       <div
+        ref={cameraPlaneRef}
         className="office-camera-plane"
         data-testid="office-camera-plane"
         style={{
@@ -310,11 +353,22 @@ export const OfficeStage: React.FC<OfficeStageProps> = ({
           />
         )}
 
-        {/* Layer 2: Depth-Sorted Elastic 4-Way Standing Desk Quad Pods & Invisible Wall Hotspots */}
+        {/* Layer 2: Depth-Sorted Elastic 4-Way Standing Desk Quad Pods, Smart Props & Wall Hotspots */}
         <FurnitureLayer
           items={elasticRoom.furniture}
           amnesiaDeskIds={amnesiaDeskIds}
+          selectedDeskId={selectedFurnitureId}
+          isBuildMode={isBuildMode}
           onFurnitureClick={onSelectFurniture}
+          onFurnitureDragStart={(item, clientX, clientY) => {
+            furnitureDragRef.current = {
+              id: item.id,
+              startClientX: clientX,
+              startClientY: clientY,
+              origX: item.x,
+              origY: item.y,
+            }
+          }}
         />
 
         {/* Layer 3: Depth-Sorted 4-Direction Isometric Characters */}

@@ -927,6 +927,21 @@ export const OFFICE_THEME_PACKS: ReadonlyArray<OfficeThemePack> = [
     room: COMMAND_OFFICE_ROOM,
     wallBoardRect: DEFAULT_WALL_BOARD_RECT,
   },
+  {
+    id: 'retro-90s-bullpen',
+    name: '1992 Smoke-Filled Retro Bullpen',
+    shortLabel: '🚬 Retro 90s Bullpen (Smoke Haze)',
+    badge: 'RETRO 90S',
+    description:
+      'Vintage 1990s agency bullpen with warm CRT amber grading, drifting cigar/cigarette smoke haze, standing ashtrays, and arcade breaks.',
+    room: {
+      ...COMMAND_OFFICE_ROOM,
+      id: 'retro-90s-bullpen',
+      name: '1992 Smoke-Filled Retro Agency Bullpen',
+      subtitle: 'CRT Amber Monitors · Cigar & Coffee Breakroom · 16-Bit Arcade',
+    },
+    wallBoardRect: DEFAULT_WALL_BOARD_RECT,
+  },
 ]
 
 export function getOfficeThemePack(themeId?: ThemePackId | string | null): OfficeThemePack {

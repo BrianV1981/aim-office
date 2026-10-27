@@ -66,10 +66,32 @@ export type FurnitureCategory =
   | 'entry-door'
   | 'plant'
   | 'server-rack'
+  | 'lounge-couch'
+  | 'smoke-station'
+  | 'vape-station'
+  | 'water-cooler'
+  | 'arcade-cabinet'
+
+export type IdleActivityEmote = 'coffee' | 'smoke' | 'vape' | 'lounge' | 'water' | 'arcade'
+
+export interface HangoutSpot {
+  id: string
+  furnitureId: string
+  label: string
+  x: number
+  y: number
+  facing: SpriteFacing
+  emote: IdleActivityEmote
+  isSeated?: boolean
+}
 
 export type PodSlotOrientation = 'NW' | 'NE' | 'SW' | 'SE'
 
-export type ThemePackId = 'classic-command' | 'sovereign-war-room' | 'cutaway-agency'
+export type ThemePackId =
+  | 'classic-command'
+  | 'sovereign-war-room'
+  | 'cutaway-agency'
+  | 'retro-90s-bullpen'
 
 export interface WallBoardRectConfig {
   left: number
@@ -109,6 +131,9 @@ export interface FurnitureAsset {
   interactive?: boolean
   state?: 'idle' | 'active' | 'brewing' | 'alert'
   assignedSpotId?: string
+  isUserPlaced?: boolean
+  catalogId?: string
+  hangoutSpots?: HangoutSpot[]
 }
 
 export interface WorkstationSpot {
@@ -161,4 +186,7 @@ export interface OfficeCharacter {
   gitBranch?: string
   worktreePath?: string
   projectNumber?: number
+  idleEmote?: IdleActivityEmote
+  isSeated?: boolean
+  hangoutSpotId?: string
 }

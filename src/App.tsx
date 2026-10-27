@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { AgentInspectorDrawer } from './components/AgentInspectorDrawer'
 import { AgentStaffRoster, buildFullStaffRosterCharacters } from './components/AgentStaffRoster'
+import { BuildModeDock } from './components/BuildModeDock'
 import { OfficeStage } from './components/OfficeStage'
 import { TopCommandBar } from './components/TopCommandBar'
 import {
@@ -8,6 +9,16 @@ import {
   KanbanTicketItem,
   WhiteboardModal,
 } from './components/WhiteboardModal'
+import {
+  addCatalogPropToLayout,
+  applyCustomLayoutToRoom,
+  loadCustomLayoutMap,
+  removePlacedPropFromLayout,
+  resetThemeLayout,
+  saveCustomLayoutMap,
+  ThemeLayoutMap,
+  updateFurniturePositionInLayout,
+} from './office/layoutPersistence'
 import { getOfficeThemePack } from './office/rooms'
 import { FurnitureAsset, OfficeCharacter, ThemePackId } from './office/types'
 import { useOfficeDirector } from './office/useOfficeDirector'
@@ -20,7 +31,8 @@ export const App: React.FC = () => {
       if (
         saved === 'sovereign-war-room' ||
         saved === 'cutaway-agency' ||
-        saved === 'classic-command'
+        saved === 'classic-command' ||
+        saved === 'retro-90s-bullpen'
       ) {
         return saved
       }
@@ -28,7 +40,17 @@ export const App: React.FC = () => {
     return 'sovereign-war-room'
   })
 
+  const [customLayoutMap, setCustomLayoutMap] = useState<ThemeLayoutMap>(() =>
+    loadCustomLayoutMap()
+  )
+  const [isBuildMode, setIsBuildMode] = useState<boolean>(false)
+  const [selectedFurnitureId, setSelectedFurnitureId] = useState<string | null>(null)
+
   const activeThemePack = useMemo(() => getOfficeThemePack(activeThemeId), [activeThemeId])
+  const customizedRoom = useMemo(
+    () => applyCustomLayoutToRoom(activeThemePack.room, activeThemeId, customLayoutMap),
+    [activeThemePack.room, activeThemeId, customLayoutMap]
+  )
 
   const {
     characters,
@@ -39,7 +61,7 @@ export const App: React.FC = () => {
     triggerCourierWalk,
     handleCharactersTick,
     client,
-  } = useOfficeDirector({ room: activeThemePack.room })
+  } = useOfficeDirector({ room: customizedRoom })
 
   const [lightingMode, setLightingMode] = useState<'day' | 'night'>('day')
   const [selectedSession, setSelectedSession] = useState<string | null>(null)
@@ -67,7 +89,7 @@ export const App: React.FC = () => {
   const themedCharacters = useMemo(() => {
     const alignedLive = characters.map((char) => {
       if (char.targetWaypoints.length > 0) return char
-      const spot = activeThemePack.room.workstations.find((w) => w.id === char.deskSpotId)
+      const spot = customizedRoom.workstations.find((w) => w.id === char.deskSpotId)
       if (!spot) return char
       return {
         ...char,
@@ -76,8 +98,50 @@ export const App: React.FC = () => {
         zIndexOverride: spot.zIndexOverride,
       }
     })
-    return buildFullStaffRosterCharacters(alignedLive, activeThemePack.room, showFullRoster)
-  }, [characters, activeThemePack, showFullRoster])
+    return buildFullStaffRosterCharacters(alignedLive, customizedRoom, showFullRoster)
+  }, [characters, customizedRoom, showFullRoster])
+
+  const selectedFurniture = useMemo<FurnitureAsset | null>(
+    () => customizedRoom.furniture.find((f) => f.id === selectedFurnitureId) ?? null,
+    [customizedRoom.furniture, selectedFurnitureId]
+  )
+
+  const handleMoveFurniture = (furnitureId: string, x: number, y: number) => {
+    setCustomLayoutMap((prev) => {
+      const next = updateFurniturePositionInLayout(prev, activeThemeId, furnitureId, x, y)
+      saveCustomLayoutMap(next)
+      return next
+    })
+  }
+
+  const handleAddCatalogProp = (catalogId: string) => {
+    setCustomLayoutMap((prev) => {
+      const { nextMap, addedProp } = addCatalogPropToLayout(prev, activeThemeId, catalogId)
+      saveCustomLayoutMap(nextMap)
+      if (addedProp) {
+        setSelectedFurnitureId(addedProp.id)
+      }
+      return nextMap
+    })
+  }
+
+  const handleDeleteSelectedProp = (furnitureId: string) => {
+    setCustomLayoutMap((prev) => {
+      const next = removePlacedPropFromLayout(prev, activeThemeId, furnitureId)
+      saveCustomLayoutMap(next)
+      return next
+    })
+    setSelectedFurnitureId(null)
+  }
+
+  const handleResetThemeLayout = () => {
+    setCustomLayoutMap((prev) => {
+      const next = resetThemeLayout(prev, activeThemeId)
+      saveCustomLayoutMap(next)
+      return next
+    })
+    setSelectedFurnitureId(null)
+  }
 
   const selectedCharacter = useMemo<OfficeCharacter | null>(
     () => themedCharacters.find((c) => c.sessionName === selectedSession) ?? null,
@@ -108,6 +172,10 @@ export const App: React.FC = () => {
   }, [selectedSession, client, demoMode, isFallbackActive])
 
   const handleFurnitureSelect = (furniture: FurnitureAsset) => {
+    setSelectedFurnitureId(furniture.id)
+    if (isBuildMode) {
+      return
+    }
     if (furniture.category === 'whiteboard') {
       setIsWhiteboardOpen(true)
       return
@@ -129,8 +197,8 @@ export const App: React.FC = () => {
   return (
     <div className="aim-office-app" data-theme-pack={activeThemePack.id}>
       <TopCommandBar
-        title={activeThemePack.room.name}
-        subtitle={activeThemePack.room.subtitle}
+        title={customizedRoom.name}
+        subtitle={customizedRoom.subtitle}
         characters={themedCharacters}
         lightingMode={lightingMode}
         demoMode={demoMode}
@@ -138,7 +206,9 @@ export const App: React.FC = () => {
         activeThemeId={activeThemeId}
         boardLabel={boardLabel}
         isStaffRosterOpen={isStaffRosterOpen}
+        isBuildMode={isBuildMode}
         onToggleStaffRoster={() => setIsStaffRosterOpen((o) => !o)}
+        onToggleBuildMode={() => setIsBuildMode((b) => !b)}
         onSelectTheme={handleSelectTheme}
         onToggleLighting={() => setLightingMode((m) => (m === 'day' ? 'night' : 'day'))}
         onTriggerCourierDemo={() =>
@@ -153,16 +223,28 @@ export const App: React.FC = () => {
       />
 
       <div className="office-main-workspace is-fullscreen-stage">
+        <BuildModeDock
+          isOpen={isBuildMode}
+          selectedFurniture={selectedFurniture}
+          onAddCatalogProp={handleAddCatalogProp}
+          onDeleteSelectedProp={handleDeleteSelectedProp}
+          onResetThemeLayout={handleResetThemeLayout}
+          onCloseBuildMode={() => setIsBuildMode(false)}
+        />
+
         <OfficeStage
-          room={activeThemePack.room}
+          room={customizedRoom}
           characters={themedCharacters}
           tickets={boardTickets}
           boardLabel={boardLabel}
           wallBoardRect={activeThemePack.wallBoardRect}
           lightingMode={lightingMode}
           selectedSession={selectedSession}
+          selectedFurnitureId={selectedFurnitureId}
+          isBuildMode={isBuildMode}
           onSelectCharacter={(char) => setSelectedSession(char.sessionName)}
           onSelectFurniture={handleFurnitureSelect}
+          onMoveFurniture={handleMoveFurniture}
           onOpenWhiteboard={() => setIsWhiteboardOpen(true)}
           onCharactersTick={handleCharactersTick}
         />

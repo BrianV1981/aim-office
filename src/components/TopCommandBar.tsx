@@ -12,7 +12,11 @@ export interface TopCommandBarProps {
   activeThemeId?: ThemePackId
   boardLabel?: string
   isStaffRosterOpen?: boolean
+  isBuildMode?: boolean
+  idleHangoutsEnabled?: boolean
   onToggleStaffRoster?: () => void
+  onToggleBuildMode?: () => void
+  onToggleIdleHangouts?: () => void
   onSelectTheme?: (themeId: ThemePackId) => void
   onToggleLighting: () => void
   onTriggerCourierDemo: () => void
@@ -30,7 +34,11 @@ export const TopCommandBar: React.FC<TopCommandBarProps> = ({
   activeThemeId = 'sovereign-war-room',
   boardLabel,
   isStaffRosterOpen = false,
+  isBuildMode = false,
+  idleHangoutsEnabled = true,
   onToggleStaffRoster,
+  onToggleBuildMode,
+  onToggleIdleHangouts,
   onSelectTheme,
   onToggleLighting,
   onTriggerCourierDemo,
@@ -160,6 +168,28 @@ export const TopCommandBar: React.FC<TopCommandBarProps> = ({
               ))}
             </select>
           </label>
+        )}
+        {onToggleBuildMode && (
+          <button
+            type="button"
+            className={`hud-btn btn-build-mode${isBuildMode ? ' is-active' : ''}`}
+            data-testid="btn-toggle-build-mode"
+            onClick={onToggleBuildMode}
+            title="Toggle Interactive Layout & Smart Furniture Builder"
+          >
+            🛠️ BUILD
+          </button>
+        )}
+        {onToggleIdleHangouts && (
+          <button
+            type="button"
+            className={`hud-btn btn-hangouts-mode${idleHangoutsEnabled ? ' is-active' : ''}`}
+            data-testid="btn-toggle-idle-hangouts"
+            onClick={onToggleIdleHangouts}
+            title="Toggle Autonomous Idle Agent Breakroom & Lounge Hangouts"
+          >
+            {idleHangoutsEnabled ? '☕ BREAKS ON' : '🪑 AT DESKS'}
+          </button>
         )}
         <button
           type="button"
