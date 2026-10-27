@@ -2253,4 +2253,79 @@ body {
   animation-delay: 1.4s;
 }
 
+/* Issue #19: Theme-Reactive Idle Props (Coffee, Cigar/Cigarette, Cyber-Vape), Seated Pose & Atmospheric Smoke/Vapor FX */
+.character-sprite-frame {
+  position: relative;
+}
+
+.character-sprite-frame.is-seated-frame {
+  clip-path: inset(0 0 22% 0);
+  transform: translateY(15%) scaleY(0.92);
+}
+
+.character-idle-prop-overlay {
+  position: absolute;
+  right: -12px;
+  top: 10%;
+  pointer-events: none;
+  z-index: 12;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.75));
+}
+
+.office-character-actor[data-facing="front-left"] .character-idle-prop-overlay,
+.office-character-actor[data-facing="rear-left"] .character-idle-prop-overlay {
+  left: -12px;
+  right: auto;
+  transform: scaleX(-1);
+}
+
+.emote-prop-svg {
+  display: block;
+  overflow: visible;
+}
+
+@keyframes smokeHazeDrift {
+  0%, 100% {
+    transform: translate3d(-1.5%, -0.5%, 0) scale(1.03);
+    opacity: 0.85;
+  }
+  50% {
+    transform: translate3d(1.5%, 0.8%, 0) scale(1.06);
+    opacity: 1;
+  }
+}
+
+.office-atmosphere-fx {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 980;
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+
+/* Retro 1992 Smoke-Filled Bullpen Theme: Warm CRT Amber Grading + Drifting Cigar/Cigarette Smoke Haze */
+.aim-office-app[data-theme-pack="retro-90s-bullpen"] .office-room-bg-img {
+  filter: sepia(0.38) contrast(1.08) brightness(0.88) hue-rotate(-10deg);
+}
+
+.aim-office-app[data-theme-pack="retro-90s-bullpen"] .office-atmosphere-fx {
+  opacity: 1;
+  background:
+    radial-gradient(ellipse 55% 28% at 75% 68%, rgba(226, 232, 240, 0.24) 0%, transparent 70%),
+    radial-gradient(ellipse 65% 32% at 35% 30%, rgba(217, 119, 6, 0.16) 0%, transparent 75%),
+    radial-gradient(ellipse 80% 40% at 50% 45%, rgba(148, 163, 184, 0.18) 0%, transparent 80%);
+  animation: smokeHazeDrift 9s infinite ease-in-out;
+}
+
+/* Sovereign War Room (Sci-Fi): Subterranean Neon Cyan/Violet Cyber-Vapor Plume */
+.aim-office-app[data-theme-pack="sovereign-war-room"] .office-atmosphere-fx {
+  opacity: 0.85;
+  background:
+    radial-gradient(ellipse 36% 24% at 83% 74%, rgba(56, 189, 248, 0.22) 0%, transparent 70%),
+    radial-gradient(ellipse 32% 20% at 80% 70%, rgba(168, 85, 247, 0.18) 0%, transparent 72%);
+  animation: smokeHazeDrift 7s infinite ease-in-out;
+}
+
+
 

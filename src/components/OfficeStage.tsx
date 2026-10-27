@@ -382,6 +382,13 @@ export const OfficeStage: React.FC<OfficeStageProps> = ({
             />
           ))}
         </div>
+
+        {/* Layer 4: Theme-Reactive Atmospheric Smoke / Cyber-Vapor Haze Overlay (#19) */}
+        <div
+          className="office-atmosphere-fx"
+          data-testid="office-atmosphere-fx"
+          aria-hidden="true"
+        />
       </div>
 
       {/* Bottom Tactical HUD Dock: Live Telemetry Feed + RTS Squad Quick-Select Hotbar + Camera Gimbal */}

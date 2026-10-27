@@ -475,4 +475,77 @@ describe('AIM-Office Isometric 2.5D Engine, Elastic 4-Way Quad Pods, Pan/Zoom & 
     expect(disabledHangouts[1].hangoutSpotId).toBeUndefined()
     expect(disabledHangouts[2].hangoutSpotId).toBeUndefined()
   })
+
+  it('renders theme-reactive idle prop overlays (smoke, vape, coffee), 4-angle seated posture, and Retro 90s Bullpen atmosphere FX (#19)', () => {
+    const retroPack = getOfficeThemePack('retro-90s-bullpen')
+    expect(retroPack.id).toBe('retro-90s-bullpen')
+
+    const emoteChars: OfficeCharacter[] = [
+      {
+        id: 'c-smoker',
+        sessionName: 'aim-ld',
+        displayName: 'aim-ld',
+        roleTitle: 'LeadDeeds',
+        vessel: 'AGY',
+        archetype: 'agent-leaddeeds',
+        status: 'IDLE',
+        context: { pct: 6, severity: 'green' },
+        deskSpotId: 'spot-2',
+        currentWaypointId: 'wp-desk-2',
+        position: { x: 82.0, y: 76.0 },
+        targetWaypoints: [],
+        facing: 'front-right',
+        idleEmote: 'smoke',
+        isSeated: false,
+      },
+      {
+        id: 'c-vaper',
+        sessionName: 'aim-connect',
+        displayName: 'aim-connect',
+        roleTitle: 'Connect',
+        vessel: 'AGY',
+        archetype: 'agent-connect',
+        status: 'IDLE',
+        context: { pct: 12, severity: 'green' },
+        deskSpotId: 'spot-3',
+        currentWaypointId: 'wp-desk-3',
+        position: { x: 83.5, y: 75.5 },
+        targetWaypoints: [],
+        facing: 'front-left',
+        idleEmote: 'vape',
+        isSeated: false,
+      },
+      {
+        id: 'c-seated',
+        sessionName: 'aim-tbsoftwash',
+        displayName: 'aim-tbsoftwash',
+        roleTitle: 'TBSoftwash',
+        vessel: 'AGY',
+        archetype: 'agent-tbsoftwash',
+        status: 'IDLE',
+        context: { pct: 5, severity: 'green' },
+        deskSpotId: 'spot-4',
+        currentWaypointId: 'wp-desk-4',
+        position: { x: 20.0, y: 79.0 },
+        targetWaypoints: [],
+        facing: 'front-right',
+        idleEmote: 'lounge',
+        isSeated: true,
+      },
+    ]
+
+    render(<OfficeStage room={retroPack.room} characters={emoteChars} />)
+
+    expect(screen.getByTestId('office-atmosphere-fx')).toBeInTheDocument()
+    expect(screen.getByTestId('emote-prop-aim-ld')).toHaveAttribute('data-emote', 'smoke')
+    expect(screen.getByTestId('badge-aim-ld')).toHaveTextContent('🚬')
+
+    expect(screen.getByTestId('emote-prop-aim-connect')).toHaveAttribute('data-emote', 'vape')
+    expect(screen.getByTestId('badge-aim-connect')).toHaveTextContent('💨')
+
+    const seatedActor = screen.getByTestId('character-aim-tbsoftwash')
+    expect(seatedActor).toHaveAttribute('data-seated', 'true')
+    expect(screen.getByTestId('badge-aim-tbsoftwash')).toHaveTextContent('🛋️')
+    expect(screen.getByTestId('badge-aim-tbsoftwash')).toHaveTextContent('Seated')
+  })
 })
