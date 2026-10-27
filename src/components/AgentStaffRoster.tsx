@@ -370,6 +370,7 @@ export const AgentStaffRoster: React.FC<AgentStaffRosterProps> = ({
       aria-label="Office Staff & Agent Fleet Roster"
       style={{
         transform: `translate(${dragOffset.x}px, ${dragOffset.y}px)`,
+        zIndex: isDragging ? 3250 : 3000,
       }}
     >
       {/* Draggable Header */}

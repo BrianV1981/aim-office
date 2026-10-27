@@ -86,6 +86,7 @@ describe('AIM-Office HUD Command Bar, Forensic Inspector Drawer & Kanban Modal (
     expect(screen.getByTestId('inspector-context-pct')).toHaveTextContent('18%')
     expect(screen.getByTestId('dossier-stat-strip')).toHaveTextContent('82% OPTIMAL')
     expect(screen.getByTestId('agent-inspector-drawer')).toHaveAttribute('data-floating', 'true')
+    expect(screen.getByTestId('agent-inspector-drawer').style.zIndex).toBe('3100')
     expect(screen.getByTestId('inspector-drag-handle')).toBeInTheDocument()
 
     await waitFor(() => {
@@ -271,6 +272,7 @@ describe('AIM-Office HUD Command Bar, Forensic Inspector Drawer & Kanban Modal (
     )
 
     expect(screen.getByTestId('agent-staff-roster')).toBeInTheDocument()
+    expect(screen.getByTestId('agent-staff-roster').style.zIndex).toBe('3000')
     expect(screen.getByTestId('staff-roster-count')).toHaveTextContent('20 Agents')
     expect(screen.getByTestId('staff-row-aim-joshua')).toBeInTheDocument()
     expect(screen.getByTestId('staff-row-aim-ld')).toBeInTheDocument()

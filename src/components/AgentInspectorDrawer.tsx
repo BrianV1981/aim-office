@@ -266,6 +266,7 @@ export const AgentInspectorDrawer: React.FC<AgentInspectorDrawerProps> = ({
       aria-label={`Agent Inspector for ${character.sessionName}`}
       style={{
         transform: `translate(${dragOffset.x}px, ${dragOffset.y}px)`,
+        zIndex: isDraggingCard ? 3250 : 3100,
       }}
     >
       {/* Draggable Header Bar */}

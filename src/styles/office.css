@@ -34,13 +34,13 @@ body {
   display: block;
 }
 
-/* Floating 3-Pod Tactical Top HUD (#13) */
+/* Floating 3-Pod Tactical Top HUD (#13, #14) */
 .top-command-bar {
   position: fixed;
   top: 10px;
   left: 14px;
   right: 14px;
-  z-index: 1700;
+  z-index: 1300;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -239,6 +239,8 @@ body {
 .office-stage-viewport,
 .office-stage-canvas {
   position: relative;
+  z-index: 1;
+  isolation: isolate;
   width: 100vw;
   height: 100vh;
   overflow: hidden;
@@ -267,6 +269,8 @@ body {
 
 .office-camera-plane {
   position: relative;
+  z-index: 1;
+  isolation: isolate;
   width: min(100vw, calc(100vh * 1376 / 768));
   aspect-ratio: 1376 / 768;
   border-radius: 10px;
@@ -280,13 +284,13 @@ body {
   filter: saturate(0.92) brightness(0.86);
 }
 
-/* Bottom Tactical HUD Dock: Live Feed + RTS Squad Quick-Select Hotbar + Camera Gimbal (#13) */
+/* Bottom Tactical HUD Dock: Live Feed + RTS Squad Quick-Select Hotbar + Camera Gimbal (#13, #14) */
 .tactical-bottom-dock {
   position: fixed;
   bottom: 12px;
   left: 16px;
   right: 16px;
-  z-index: 1620;
+  z-index: 1200;
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
@@ -1079,7 +1083,7 @@ body {
   background: var(--accent-red);
 }
 
-/* Agent Inspector Drawer — Floating, Draggable, Scrollable, Wide Overlay Card */
+/* Agent Inspector Drawer — Floating, Draggable, Scrollable, Wide Overlay Card (#14: z-index 3100 on top of all HUD/stage) */
 .agent-inspector-drawer {
   position: fixed;
   top: 64px;
@@ -1087,8 +1091,8 @@ body {
   width: 530px;
   max-width: calc(100vw - 28px);
   max-height: calc(100vh - 148px);
-  z-index: 1650;
-  background: rgba(8, 13, 26, 0.95);
+  z-index: 3100;
+  background: rgba(8, 13, 26, 0.97);
   backdrop-filter: blur(14px);
   border: 1.5px solid rgba(56, 189, 248, 0.55);
   border-radius: 14px;
@@ -1144,6 +1148,7 @@ body {
 }
 
 .agent-inspector-drawer.is-dragging-card {
+  z-index: 3250;
   user-select: none;
   border-color: var(--accent-gold);
 }
@@ -1396,7 +1401,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 2000;
+  z-index: 3500;
   padding: 24px;
 }
 
@@ -1702,12 +1707,12 @@ body {
   width: 296px;
   max-width: calc(100vw - 28px);
   max-height: calc(100vh - 148px);
-  z-index: 1600;
+  z-index: 3000;
   display: flex;
   flex-direction: column;
   gap: 8px;
   padding: 11px;
-  background: rgba(8, 13, 26, 0.94);
+  background: rgba(8, 13, 26, 0.97);
   backdrop-filter: blur(14px);
   border: 1.5px solid rgba(56, 189, 248, 0.5);
   border-radius: 14px;
@@ -1717,6 +1722,7 @@ body {
 }
 
 .agent-staff-roster.is-dragging {
+  z-index: 3250;
   user-select: none;
   border-color: var(--accent-cyan);
 }
