@@ -5,7 +5,10 @@ import {
   formatTokenCountCompact,
   parseFleetPanesResponse,
 } from '../src/services/aimConnectClient'
-import { parsePaneScrollbackTelemetry } from '../src/server/officeBridge'
+import {
+  fetchFleetFromAimConnect,
+  parsePaneScrollbackTelemetry,
+} from '../src/server/officeBridge'
 import {
   applyCourierDispatchToCharacters,
   mapFleetToOfficeCharacters,
@@ -168,5 +171,63 @@ describe('AIM-Connect Fleet Telemetry Bridge & Office Director (#2 & #5)', () =>
     }
     const badge = resolveOverheadStatusBadge(activeChar)
     expect(badge.label).toBe('Active')
+  })
+
+  it('proxies /api/office/fleet through aim-connect (:8000), filters customer sandboxes, enriches project_number, and caches results (#20)', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        fleet: [
+          {
+            session_name: 'agent-op_9f3c7e-opencode',
+            vessel: 'agy',
+            status: 'IDLE',
+            path: '/home/kingb/aim-connect/backend',
+            repo_name: 'backend',
+            branch: 'master',
+            tokens_used: 18_000,
+            tokens_limit: 1_000_000,
+            context_pct: 1.8,
+          },
+          {
+            session_name: 'aim-office',
+            vessel: 'agy',
+            status: 'IDLE',
+            path: '/home/kingb/aim-office',
+            repo_name: 'aim-office',
+            branch: 'main',
+            tokens_used: 95_000,
+            tokens_limit: 1_000_000,
+            context_pct: 9.5,
+          },
+          {
+            session_name: 'aim-ld',
+            vessel: 'agy',
+            status: 'THINKING',
+            path: '/home/kingb/aim-ld',
+            repo_name: 'aim-ld',
+            branch: 'main',
+            tokens_used: 340_000,
+            tokens_limit: 1_000_000,
+            context_pct: 34.0,
+          },
+        ],
+      }),
+    } as Response)
+
+    const fleet = await fetchFleetFromAimConnect('http://127.0.0.1:8000', true)
+    expect(fleet).toHaveLength(2)
+    expect(fleet[0].session_name).toBe('aim-office')
+    expect(fleet[0].project_number).toBe(14)
+    expect(fleet[1].session_name).toBe('aim-ld')
+    expect(fleet[1].status).toBe('AMNESIA')
+    expect(fleet[1].project_number).toBe(5)
+
+    // Second call uses in-memory cache without re-fetching
+    const cachedFleet = await fetchFleetFromAimConnect('http://127.0.0.1:8000', false)
+    expect(cachedFleet).toHaveLength(2)
+    expect(fetchSpy).toHaveBeenCalledTimes(1)
+
+    fetchSpy.mockRestore()
   })
 })

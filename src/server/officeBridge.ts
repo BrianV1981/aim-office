@@ -138,12 +138,22 @@ export function resolveMappedProjectNumber(
   return 14
 }
 
+const repoProjectConfigCache = new Map<
+  string,
+  { projectNumber: number | null; owner: string; repo: string }
+>()
+
 export function readRepoProjectConfig(cwdPath: string, sessionName = ''): {
   projectNumber: number | null
   owner: string
   repo: string
 } {
   const mainRoot = resolveMainRepoRoot(cwdPath)
+  const cacheKey = `${mainRoot}::${sessionName}`
+  const cached = repoProjectConfigCache.get(cacheKey)
+  if (cached) {
+    return cached
+  }
   const candidates = [
     path.join(mainRoot, 'joshua_os', '.aim_core', 'CONFIG.json'),
     path.join(cwdPath, 'joshua_os', '.aim_core', 'CONFIG.json'),
@@ -156,22 +166,26 @@ export function readRepoProjectConfig(cwdPath: string, sessionName = ''): {
         const gp = raw?.settings?.github_projects
         if (gp && typeof gp === 'object') {
           const cfgNum = typeof gp.number === 'number' ? gp.number : null
-          return {
+          const resolved = {
             projectNumber: resolveMappedProjectNumber(sessionName, cwdPath, cfgNum),
             owner: typeof gp.owner === 'string' ? gp.owner : 'BrianV1981',
             repo: typeof gp.repo === 'string' ? gp.repo : '',
           }
+          repoProjectConfigCache.set(cacheKey, resolved)
+          return resolved
         }
       }
     } catch {
       // Ignore malformed config
     }
   }
-  return {
+  const fallback = {
     projectNumber: resolveMappedProjectNumber(sessionName, cwdPath, null),
     owner: 'BrianV1981',
     repo: '',
   }
+  repoProjectConfigCache.set(cacheKey, fallback)
+  return fallback
 }
 
 export function readGitBranchFast(cwdPath: string): string {
@@ -463,7 +477,21 @@ export function parsePaneScrollbackTelemetry(
   }
 }
 
-export function collectLocalTmuxFleet(): LocalFleetSessionRecord[] {
+let localTmuxFleetCache: { ts: number; data: LocalFleetSessionRecord[] } | null = null
+const LOCAL_TMUX_FLEET_CACHE_TTL_MS = 3_000
+
+let aimConnectFleetCache: { ts: number; data: LocalFleetSessionRecord[] } | null = null
+const AIM_CONNECT_FLEET_CACHE_TTL_MS = 2_500
+
+export function collectLocalTmuxFleet(bypassCache = false): LocalFleetSessionRecord[] {
+  const now = Date.now()
+  if (
+    !bypassCache &&
+    localTmuxFleetCache &&
+    now - localTmuxFleetCache.ts < LOCAL_TMUX_FLEET_CACHE_TTL_MS
+  ) {
+    return localTmuxFleetCache.data
+  }
   const fmt =
     '#{session_name}@@@#{window_index}@@@#{pane_index}@@@#{pane_current_command}@@@#{pane_current_path}@@@#{session_attached}'
   const raw = runCmd('tmux', ['list-panes', '-a', '-F', fmt], 3000)
@@ -560,7 +588,90 @@ export function collectLocalTmuxFleet(): LocalFleetSessionRecord[] {
     })
   }
 
+  localTmuxFleetCache = { ts: now, data: fleet }
   return fleet
+}
+
+/**
+ * Primary Fleet Telemetry Bridge (#20):
+ * Queries `aim-connect` (`http://127.0.0.1:8000/api/fleet/panes`) which uses activity-delta pane caching
+ * and 2.0s snapshot caching, eliminating duplicate synchronous `tmux capture-pane` and SQLite subprocesses
+ * inside the Vite dev server. Falls back to `collectLocalTmuxFleet()` only if `:8000` is unreachable.
+ */
+export async function fetchFleetFromAimConnect(
+  baseUrl = process.env.VITE_AIM_CONNECT_URL || 'http://127.0.0.1:8000',
+  bypassCache = false
+): Promise<LocalFleetSessionRecord[]> {
+  const now = Date.now()
+  if (
+    !bypassCache &&
+    aimConnectFleetCache &&
+    now - aimConnectFleetCache.ts < AIM_CONNECT_FLEET_CACHE_TTL_MS
+  ) {
+    return aimConnectFleetCache.data
+  }
+
+  try {
+    const cleanBase = baseUrl.replace(/\/$/, '')
+    const resp = await fetch(`${cleanBase}/api/fleet/panes`, {
+      signal: AbortSignal.timeout(1500),
+    })
+    if (resp.ok) {
+      const json = (await resp.json()) as { fleet?: Array<Record<string, unknown>> }
+      const rawFleet = Array.isArray(json?.fleet) ? json.fleet : []
+      const mapped: LocalFleetSessionRecord[] = []
+
+      for (const item of rawFleet) {
+        if (!item || typeof item !== 'object') continue
+        const sessionName = String(item.session_name ?? '').trim()
+        if (
+          !sessionName ||
+          sessionName.startsWith('aim-client-') ||
+          sessionName.startsWith('agent-')
+        ) {
+          continue
+        }
+        const panePath = String(item.path ?? '')
+        const mainRoot = resolveMainRepoRoot(panePath)
+        const repoName = String(
+          item.repo_name ?? path.basename(mainRoot || panePath || sessionName)
+        )
+        const { projectNumber, repo } = readRepoProjectConfig(panePath, sessionName)
+        const contextPct = Number(item.context_pct ?? 0)
+        const tier = compute30PctRuleTier(contextPct)
+        const rawStatus = String(item.status ?? 'IDLE').toUpperCase()
+        const finalStatus = contextPct >= 30 ? 'AMNESIA' : rawStatus
+
+        mapped.push({
+          session_name: sessionName,
+          vessel: String(item.vessel ?? 'agy'),
+          status: finalStatus,
+          command: String(item.command ?? 'agy'),
+          path: panePath,
+          repo_name: repoName,
+          branch: String(item.branch ?? 'main') || 'main',
+          is_worktree: Boolean(item.is_worktree ?? panePath.includes('/workspace/issue-')),
+          tokens_used: Number(item.tokens_used ?? 0),
+          tokens_limit: Number(item.tokens_limit ?? 1_000_000),
+          context_pct: contextPct,
+          tier,
+          preview: String(item.preview ?? ''),
+          attached: Boolean(item.attached),
+          project_number: projectNumber,
+          project_repo: repo || `BrianV1981/${repoName}`,
+        })
+      }
+
+      if (mapped.length > 0) {
+        aimConnectFleetCache = { ts: now, data: mapped }
+        return mapped
+      }
+    }
+  } catch {
+    // Fall back to cached local tmux fleet below
+  }
+
+  return collectLocalTmuxFleet(bypassCache)
 }
 
 export function resolveSessionPath(sessionName: string): string {
@@ -977,7 +1088,7 @@ export function createOfficeBridgePlugin(): Plugin {
         const pathname = parsedUrl.pathname
 
         if (req.method === 'GET' && pathname === '/api/office/fleet') {
-          const fleet = collectLocalTmuxFleet()
+          const fleet = await fetchFleetFromAimConnect()
           return sendJson(res, 200, {
             fleet,
             dispatches: recentCommunicateDispatches,

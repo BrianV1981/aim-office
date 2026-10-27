@@ -416,7 +416,7 @@ const FurnitureNode: React.FC<{
             display: 'block',
             filter: isAmnesiaAlert
               ? 'drop-shadow(0 0 8px rgba(239, 68, 68, 0.9))'
-              : 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.65))',
+              : undefined,
           }}
           onError={() => setSpriteFailed(true)}
           draggable={false}
