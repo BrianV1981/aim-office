@@ -12,6 +12,7 @@ import {
   resolveRosterCharacterArchetype,
   resolveSovereignArchetype,
 } from '../src/office/useOfficeDirector'
+import { resolveOverheadStatusBadge } from '../src/components/CharacterActor'
 
 describe('AIM-Connect Fleet Telemetry Bridge & Office Director (#2 & #5)', () => {
   it('maps sovereign vessel archetypes and deterministically assigns unique 20-character roster avatars', () => {
@@ -126,5 +127,46 @@ describe('AIM-Connect Fleet Telemetry Bridge & Office Director (#2 & #5)', () =>
     expect(formatTokenCountCompact(244_300, 1_000_000)).toBe('244k/1M')
     expect(formatTokenCountCompact(0, 1_000_000)).toBe('0/1M')
     expect(formatTokenCountCompact(32_500, 200_000)).toBe('33k/200k')
+
+    // Completed tool call ● Bash(...) and prose "confirmation" above idle `? for shortcuts` must stay IDLE (#16)
+    const idleCompletedToolScrollback = [
+      '5.0k in | 2.0k out | 153 thinking',
+      '● Bash(git add memory-wiki/ && git commit -m "docs") (ctrl+o to expand)',
+      'Chase Zelle confirmation: ERIK R BROWN sent you $325.00.',
+      '>',
+      '? for shortcuts                                      Gemini 4 Argon · high',
+    ].join('\n')
+    const parsedIdle = parsePaneScrollbackTelemetry(
+      idleCompletedToolScrollback,
+      'agy.real',
+      'aim-ld-content'
+    )
+    expect(parsedIdle.status).toBe('IDLE')
+
+    // Active tool call ○ Bash(...) + spinner + `esc to cancel` must be TOOL_EXEC (#16)
+    const activeToolScrollback = [
+      '105.9k in | 1.4k out | 743 thinking',
+      '○ Bash(npx vitest run) (ctrl+o to expand)',
+      '⢿  Running command...',
+      '>',
+      'esc to cancel                                        Gemini 4 Argon · high',
+    ].join('\n')
+    const parsedActive = parsePaneScrollbackTelemetry(
+      activeToolScrollback,
+      'agy.real',
+      'aim-office'
+    )
+    expect(parsedActive.status).toBe('TOOL_EXEC')
+
+    // Active badge label must stay compact ("Active") even with 90-char preview (#16)
+    const mapped = mapFleetToOfficeCharacters(DEMO_FLEET_PANES)
+    const activeChar = {
+      ...mapped[0],
+      status: 'TOOL_EXEC' as const,
+      activeToolPill:
+        'committed (e785f38), and re-indexed LanceDB (1,631 fragments). 38 bundles ready',
+    }
+    const badge = resolveOverheadStatusBadge(activeChar)
+    expect(badge.label).toBe('Active')
   })
 })

@@ -1716,7 +1716,7 @@ body {
   position: fixed;
   top: 64px;
   left: 14px;
-  width: 296px;
+  width: 320px;
   max-width: calc(100vw - 28px);
   max-height: calc(100vh - 148px);
   z-index: 3000;
@@ -1932,10 +1932,13 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 4px;
+  gap: 6px;
+  min-width: 0;
 }
 
 .staff-row-session {
+  flex: 1;
+  min-width: 0;
   font-family: monospace;
   font-size: 11.5px;
   font-weight: 700;
@@ -1952,50 +1955,59 @@ body {
   flex-shrink: 0;
 }
 
-.staff-cli-badge {
+.staff-status-chip {
   padding: 1px 5px;
   border-radius: 4px;
   font-size: 9px;
   font-family: monospace;
   font-weight: 700;
-  background: rgba(30, 41, 59, 0.95);
-  border: 1px solid rgba(148, 163, 184, 0.3);
-  color: #cbd5e1;
-}
-
-.staff-status-dot {
-  padding: 1px 5px;
-  border-radius: 4px;
-  font-size: 8.5px;
-  font-family: monospace;
-  font-weight: 700;
+  white-space: nowrap;
+  flex-shrink: 0;
   background: rgba(15, 23, 42, 0.9);
+  border: 1px solid rgba(148, 163, 184, 0.25);
   color: #94a3b8;
 }
 
-.staff-status-dot.status-thinking,
-.staff-status-dot.status-tool_exec,
-.staff-status-dot.status-walking {
-  background: rgba(16, 185, 129, 0.2);
+.staff-status-chip.tone-info {
+  background: rgba(16, 185, 129, 0.18);
+  border-color: rgba(16, 185, 129, 0.45);
   color: #6ee7b7;
 }
 
-.staff-status-dot.status-waiting {
+.staff-status-chip.tone-warning {
   background: rgba(245, 158, 11, 0.2);
+  border-color: rgba(245, 158, 11, 0.45);
   color: #fcd34d;
 }
 
-.staff-status-dot.status-amnesia {
-  background: rgba(239, 68, 68, 0.28);
+.staff-status-chip.tone-danger {
+  background: rgba(239, 68, 68, 0.25);
+  border-color: rgba(239, 68, 68, 0.55);
   color: #fca5a5;
 }
 
+.staff-status-chip.tone-courier {
+  background: rgba(251, 191, 36, 0.2);
+  border-color: rgba(251, 191, 36, 0.5);
+  color: #fde68a;
+}
+
 .staff-row-role {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
   font-size: 10px;
   color: var(--text-muted);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.staff-desk-code {
+  flex-shrink: 0;
+  font-size: 9px;
+  color: #64748b;
 }
 
 .staff-row-context {

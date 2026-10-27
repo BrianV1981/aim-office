@@ -423,19 +423,28 @@ export function parsePaneScrollbackTelemetry(
     .map((l) => l.trim())
     .filter((l) => l.length > 0 && !/^[─━═]+$/.test(l))
 
-  const tailText = lines.slice(-12).join('\n')
+  const footerText = lines.slice(-4).join('\n')
+  const lastLine = lines[lines.length - 1] || ''
+  const isIdleAtAgyPrompt = lastLine.startsWith('? for shortcuts')
+
   let status = 'IDLE'
   if (contextPct >= 30) {
     status = 'AMNESIA'
-  } else if (
-    /[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏⢿⣻⣽⣾⣷⣯⣟]/.test(tailText) ||
-    /Generating|Working\.{2,}|Thinking\.{2,}|Running command|Executing|●\s+\w+\(/i.test(tailText)
-  ) {
-    status = 'TOOL_EXEC'
-  } else if (/yes\/no|\?\s*$|Proceed|confirm/i.test(tailText)) {
-    status = 'WAITING'
-  } else if (/esc to cancel|ctrl\+c to interrupt/i.test(tailText)) {
-    status = 'THINKING'
+  } else if (!isIdleAtAgyPrompt) {
+    if (
+      /[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏⢿⣻⣽⣾⣷⣯⣟]/.test(footerText) ||
+      /Running command\.{2,}|Executing\.{2,}|○\s+\w+\(/i.test(footerText)
+    ) {
+      status = 'TOOL_EXEC'
+    } else if (/\(yes\/no\)|\[y\/n\]|\[Y\/n\]/i.test(footerText)) {
+      status = 'WAITING'
+    } else if (
+      /esc to cancel|ctrl\+c to interrupt|Working\.{2,}|Thinking\.{2,}|Generating\.{2,}/i.test(
+        footerText
+      )
+    ) {
+      status = 'THINKING'
+    }
   }
 
   const meaningfulLines = lines.filter(

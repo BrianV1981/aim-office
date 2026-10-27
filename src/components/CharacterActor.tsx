@@ -44,7 +44,7 @@ export function resolveOverheadStatusBadge(character: OfficeCharacter): {
   if (character.status === 'COURIER' || character.courierTargetSession) {
     return {
       emoji: '📨',
-      label: character.speechBubble || `-> ${character.courierTargetSession ?? 'peer'}`,
+      label: `-> ${character.courierTargetSession ?? 'peer'}`,
       tone: 'courier',
     }
   }
@@ -65,7 +65,7 @@ export function resolveOverheadStatusBadge(character: OfficeCharacter): {
   if (character.status === 'THINKING' || character.status === 'TOOL_EXEC') {
     return {
       emoji: '⌨️',
-      label: character.activeToolPill || 'Working',
+      label: 'Active',
       tone: 'info',
     }
   }

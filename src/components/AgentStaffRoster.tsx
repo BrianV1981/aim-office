@@ -508,13 +508,17 @@ export const AgentStaffRoster: React.FC<AgentStaffRosterProps> = ({
 
               <div className="staff-row-main">
                 <div className="staff-row-top">
-                  <span className="staff-row-session">{char.sessionName}</span>
-                  <span className={`vessel-chip vessel-${char.vessel.toLowerCase()}`}>
-                    {char.vessel}
+                  <span className="staff-row-session" title={char.sessionName}>
+                    {char.sessionName}
                   </span>
-                  <span className={`staff-status-chip tone-${badge.tone}`}>
-                    {badge.emoji} {badge.label}
-                  </span>
+                  <div className="staff-row-badges">
+                    <span className={`vessel-chip vessel-${char.vessel.toLowerCase()}`}>
+                      {char.vessel}
+                    </span>
+                    <span className={`staff-status-chip tone-${badge.tone}`}>
+                      {badge.emoji} {badge.label}
+                    </span>
+                  </div>
                 </div>
 
                 <div className="staff-row-role">
