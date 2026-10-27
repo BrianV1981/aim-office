@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { AgentInspectorDrawer } from './components/AgentInspectorDrawer'
+import { AgentStaffRoster, buildFullStaffRosterCharacters } from './components/AgentStaffRoster'
 import { OfficeStage } from './components/OfficeStage'
 import { TopCommandBar } from './components/TopCommandBar'
 import {
@@ -42,6 +43,8 @@ export const App: React.FC = () => {
 
   const [lightingMode, setLightingMode] = useState<'day' | 'night'>('day')
   const [selectedSession, setSelectedSession] = useState<string | null>(null)
+  const [isStaffRosterOpen, setIsStaffRosterOpen] = useState<boolean>(true)
+  const [showFullRoster, setShowFullRoster] = useState<boolean>(true)
   const [isWhiteboardOpen, setIsWhiteboardOpen] = useState<boolean>(false)
   const [boardLabel, setBoardLabel] = useState<string>('PROJECT #14')
   const [boardTickets, setBoardTickets] = useState<KanbanTicketItem[]>(
@@ -60,8 +63,9 @@ export const App: React.FC = () => {
   }
 
   // Realign stationary characters to the active theme pack's workstation coordinates
+  // and optionally expand to the full 20-persona Sovereign Office Staff Roster
   const themedCharacters = useMemo(() => {
-    return characters.map((char) => {
+    const alignedLive = characters.map((char) => {
       if (char.targetWaypoints.length > 0) return char
       const spot = activeThemePack.room.workstations.find((w) => w.id === char.deskSpotId)
       if (!spot) return char
@@ -72,7 +76,8 @@ export const App: React.FC = () => {
         zIndexOverride: spot.zIndexOverride,
       }
     })
-  }, [characters, activeThemePack])
+    return buildFullStaffRosterCharacters(alignedLive, activeThemePack.room, showFullRoster)
+  }, [characters, activeThemePack, showFullRoster])
 
   const selectedCharacter = useMemo<OfficeCharacter | null>(
     () => themedCharacters.find((c) => c.sessionName === selectedSession) ?? null,
@@ -132,6 +137,8 @@ export const App: React.FC = () => {
         isFallbackActive={isFallbackActive}
         activeThemeId={activeThemeId}
         boardLabel={boardLabel}
+        isStaffRosterOpen={isStaffRosterOpen}
+        onToggleStaffRoster={() => setIsStaffRosterOpen((o) => !o)}
         onSelectTheme={handleSelectTheme}
         onToggleLighting={() => setLightingMode((m) => (m === 'day' ? 'night' : 'day'))}
         onTriggerCourierDemo={() =>
@@ -158,6 +165,17 @@ export const App: React.FC = () => {
           onSelectFurniture={handleFurnitureSelect}
           onOpenWhiteboard={() => setIsWhiteboardOpen(true)}
           onCharactersTick={handleCharactersTick}
+        />
+
+        <AgentStaffRoster
+          isOpen={isStaffRosterOpen}
+          characters={themedCharacters}
+          liveAgentCount={characters.length}
+          selectedSession={selectedSession}
+          showFullRoster={showFullRoster}
+          onToggleFullRoster={() => setShowFullRoster((f) => !f)}
+          onSelectCharacter={(char) => setSelectedSession(char.sessionName)}
+          onClose={() => setIsStaffRosterOpen(false)}
         />
 
         <AgentInspectorDrawer

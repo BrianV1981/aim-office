@@ -11,6 +11,8 @@ export interface TopCommandBarProps {
   isFallbackActive: boolean
   activeThemeId?: ThemePackId
   boardLabel?: string
+  isStaffRosterOpen?: boolean
+  onToggleStaffRoster?: () => void
   onSelectTheme?: (themeId: ThemePackId) => void
   onToggleLighting: () => void
   onTriggerCourierDemo: () => void
@@ -27,6 +29,8 @@ export const TopCommandBar: React.FC<TopCommandBarProps> = ({
   isFallbackActive,
   activeThemeId = 'sovereign-war-room',
   boardLabel,
+  isStaffRosterOpen = false,
+  onToggleStaffRoster,
   onSelectTheme,
   onToggleLighting,
   onTriggerCourierDemo,
@@ -107,6 +111,17 @@ export const TopCommandBar: React.FC<TopCommandBarProps> = ({
 
       {/* Interactive Command Controls */}
       <div className="command-actions-group">
+        {onToggleStaffRoster && (
+          <button
+            type="button"
+            className={`hud-btn btn-staff-roster${isStaffRosterOpen ? ' is-active' : ''}`}
+            data-testid="btn-toggle-staff-roster"
+            onClick={onToggleStaffRoster}
+            title="Toggle Office Staff & Agent Fleet Roster Column"
+          >
+            👥 Staff Roster ({characters.length})
+          </button>
+        )}
         {onSelectTheme && (
           <label className="theme-switcher-label" title="Switch Standardized Room Theme Pack">
             <span className="sr-only-label">Theme:</span>

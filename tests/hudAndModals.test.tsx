@@ -3,8 +3,14 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { TopCommandBar } from '../src/components/TopCommandBar'
 import { AgentInspectorDrawer } from '../src/components/AgentInspectorDrawer'
+import {
+  AgentStaffRoster,
+  buildFullStaffRosterCharacters,
+  SOVEREIGN_STAFF_DIRECTORY,
+} from '../src/components/AgentStaffRoster'
 import { WallTaskBoard } from '../src/components/WallTaskBoard'
 import { WhiteboardModal } from '../src/components/WhiteboardModal'
+import { COMMAND_OFFICE_ROOM } from '../src/office/rooms'
 import { resolveMappedProjectNumber } from '../src/server/officeBridge'
 import {
   DEMO_FLEET_PANES,
@@ -225,5 +231,60 @@ describe('AIM-Office HUD Command Bar, Forensic Inspector Drawer & Kanban Modal (
       'PROJECT #7 (aim-joshua)'
     )
     expect(screen.getByTestId('kanban-col-done')).toHaveTextContent('#71')
+  })
+
+  it('renders AgentStaffRoster with all 20 Sovereign staff personas, search filter, status filter pills, and 1-click agent selection (#11)', () => {
+    const fullRoster = buildFullStaffRosterCharacters(
+      sampleCharacters,
+      COMMAND_OFFICE_ROOM,
+      true
+    )
+    expect(SOVEREIGN_STAFF_DIRECTORY).toHaveLength(20)
+    expect(fullRoster).toHaveLength(20)
+
+    const onToggleFullRoster = vi.fn()
+    const onSelectCharacter = vi.fn()
+    const onClose = vi.fn()
+
+    render(
+      <AgentStaffRoster
+        isOpen={true}
+        characters={fullRoster}
+        liveAgentCount={sampleCharacters.length}
+        selectedSession="aim-office"
+        showFullRoster={true}
+        onToggleFullRoster={onToggleFullRoster}
+        onSelectCharacter={onSelectCharacter}
+        onClose={onClose}
+      />
+    )
+
+    expect(screen.getByTestId('agent-staff-roster')).toBeInTheDocument()
+    expect(screen.getByTestId('staff-roster-count')).toHaveTextContent('20 Agents')
+    expect(screen.getByTestId('staff-row-aim-joshua')).toBeInTheDocument()
+    expect(screen.getByTestId('staff-row-aim-ld')).toBeInTheDocument()
+    expect(screen.getByTestId('staff-row-aim-tbsoftwash')).toBeInTheDocument()
+
+    // Click an agent row -> selects character
+    fireEvent.click(screen.getByTestId('staff-row-aim-ld'))
+    expect(onSelectCharacter).toHaveBeenCalledWith(
+      expect.objectContaining({ sessionName: 'aim-ld' })
+    )
+
+    // Filter by search query
+    const searchInput = screen.getByTestId('input-staff-search') as HTMLInputElement
+    fireEvent.change(searchInput, { target: { value: 'tbsoftwash' } })
+    expect(screen.getByTestId('staff-row-aim-tbsoftwash')).toBeInTheDocument()
+    expect(screen.queryByTestId('staff-row-aim-joshua')).toBeNull()
+
+    // Clear search and filter by Amnesia status pill
+    fireEvent.change(searchInput, { target: { value: '' } })
+    fireEvent.click(screen.getByTestId('staff-filter-amnesia'))
+    expect(screen.getByTestId('staff-row-aim-grok')).toBeInTheDocument()
+    expect(screen.queryByTestId('staff-row-aim-office')).toBeNull()
+
+    // Toggle full roster vs live fleet mode
+    fireEvent.click(screen.getByTestId('btn-toggle-full-roster'))
+    expect(onToggleFullRoster).toHaveBeenCalledTimes(1)
   })
 })
