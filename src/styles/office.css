@@ -1049,12 +1049,24 @@ body {
 
 .context-bar-track,
 .inspector-context-bar-track {
+  position: relative;
   margin-top: 1px;
   width: 100%;
   height: 3px;
   border-radius: 2px;
   background: rgba(51, 65, 85, 0.8);
   overflow: hidden;
+}
+
+.context-threshold-tick {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 30%;
+  width: 1.5px;
+  background: rgba(251, 191, 36, 0.88);
+  pointer-events: none;
+  z-index: 2;
 }
 
 .inspector-context-bar-track {
@@ -1993,8 +2005,9 @@ body {
 }
 
 .staff-context-track {
+  position: relative;
   flex: 1;
-  height: 4px;
+  height: 5px;
   background: #060913;
   border-radius: 999px;
   overflow: hidden;

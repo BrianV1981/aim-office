@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { resolveOverheadStatusBadge } from './CharacterActor'
+import { formatTokenCountCompact } from '../services/aimConnectClient'
 import {
   ArchetypeSlug,
   IsometricRoom,
@@ -232,7 +233,12 @@ export function buildFullStaffRosterCharacters(
       vessel: persona.vessel,
       archetype: persona.archetype,
       status: 'IDLE',
-      context: { pct: 6, severity: 'green', tokensUsed: 12000, tokenBudget: 200000 },
+      context: {
+        pct: 0,
+        severity: 'green',
+        tokensUsed: 0,
+        tokenBudget: persona.vessel === 'AGY' || persona.vessel === 'Auditor' ? 1_000_000 : 200_000,
+      },
       deskSpotId: spot.id,
       currentWaypointId: spot.waypointId,
       position: { x: spot.x, y: spot.y },
@@ -517,14 +523,23 @@ export const AgentStaffRoster: React.FC<AgentStaffRosterProps> = ({
                 </div>
 
                 <div className="staff-row-context">
-                  <div className="staff-context-track">
+                  <div
+                    className="staff-context-track"
+                    title={`Context: ${char.context.pct}% (${formatTokenCountCompact(char.context.tokensUsed, char.context.tokenBudget)}) — 30% Amnesia Threshold`}
+                  >
                     <div
                       className={`staff-context-fill severity-${char.context.severity}`}
-                      style={{ width: `${Math.min(100, Math.max(4, char.context.pct))}%` }}
+                      style={{
+                        width: `${
+                          char.context.pct > 0 ? Math.min(100, Math.max(2, char.context.pct)) : 0
+                        }%`,
+                      }}
                     />
+                    <span className="context-threshold-tick" style={{ left: '30%' }} />
                   </div>
                   <span className={`staff-context-pct severity-${char.context.severity}`}>
-                    {char.context.pct}%
+                    {char.context.pct}% ·{' '}
+                    {formatTokenCountCompact(char.context.tokensUsed, char.context.tokenBudget)}
                   </span>
                 </div>
               </div>

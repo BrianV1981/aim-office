@@ -2,8 +2,10 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   AimConnectClient,
   DEMO_FLEET_PANES,
+  formatTokenCountCompact,
   parseFleetPanesResponse,
 } from '../src/services/aimConnectClient'
+import { parsePaneScrollbackTelemetry } from '../src/server/officeBridge'
 import {
   applyCourierDispatchToCharacters,
   mapFleetToOfficeCharacters,
@@ -98,5 +100,31 @@ describe('AIM-Connect Fleet Telemetry Bridge & Office Director (#2 & #5)', () =>
     expect(result.panes.some((p) => p.sessionName === 'aim-auditor')).toBe(true)
 
     fetchSpy.mockRestore()
+  })
+
+  it('accurately parses pane scrollback tokens against 1M AGY / 200k Grok windows and ignores random % output (#15)', () => {
+    const agyScrollback = [
+      'Build progress: 62% complete',
+      '12.4k in | 1.1k out',
+      '244.3k in | 2.1k out',
+    ].join('\n')
+
+    const parsedAgy = parsePaneScrollbackTelemetry(agyScrollback, 'agy.real', 'aim-office')
+    expect(parsedAgy.tokens_limit).toBe(1_000_000)
+    expect(parsedAgy.tokens_used).toBe(244_300)
+    expect(parsedAgy.context_pct).toBe(24.4)
+    expect(parsedAgy.tier).toBe('warning')
+
+    const randomPctScrollback = [
+      'Coverage: 88.5% lines covered',
+      'Ready at http://localhost:5175/',
+    ].join('\n')
+    const parsedEmpty = parsePaneScrollbackTelemetry(randomPctScrollback, 'agy.real', 'aim-office')
+    expect(parsedEmpty.tokens_used).toBe(0)
+    expect(parsedEmpty.context_pct).toBe(0)
+
+    expect(formatTokenCountCompact(244_300, 1_000_000)).toBe('244k/1M')
+    expect(formatTokenCountCompact(0, 1_000_000)).toBe('0/1M')
+    expect(formatTokenCountCompact(32_500, 200_000)).toBe('33k/200k')
   })
 })

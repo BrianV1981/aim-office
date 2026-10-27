@@ -13,7 +13,10 @@ export interface LocalFleetSessionRecord {
   repo_name: string
   branch: string
   is_worktree: boolean
+  tokens_used: number
+  tokens_limit: number
   context_pct: number
+  tier: 'normal' | 'warning' | 'critical'
   preview: string
   attached: boolean
   project_number: number | null
@@ -177,60 +180,261 @@ export function readGitBranchFast(cwdPath: string): string {
   return branchOut || 'main'
 }
 
+const ANSI_ESCAPE_RE = /\x1b\[[0-9;?]*[a-zA-Z]/g
+const AGY_TOKENS_RE =
+  /(\d+(?:\.\d+)?)\s*([kKmM]?)\s*in\s*\|\s*(\d+(?:\.\d+)?)\s*([kKmM]?)\s*out/g
+const SLASH_TOKENS_RE =
+  /(\d+(?:\.\d+)?)\s*([kKmM])\s*\/\s*(\d+(?:\.\d+)?)\s*([kKmM])/g
+const GENERIC_TOKENS_RE =
+  /(\d+(?:,\d{3})+|\d+(?:\.\d+)?\s*[kKmM])\s*(?:tokens|tok|ctx)\b/gi
+const EXPLICIT_PCT_RE = /(\d{1,2}(?:\.\d+)?)\s*%\s*(?:context|ctx)\b/gi
+
+export function parseTokenNumber(numStr: string, suffix = ''): number {
+  let cleaned = (numStr || '').replace(/,/g, '').trim()
+  if (!cleaned) return 0
+  let s = (suffix || '').toLowerCase()
+  const lastChar = cleaned[cleaned.length - 1]?.toLowerCase()
+  if ((lastChar === 'k' || lastChar === 'm') && !s) {
+    s = lastChar
+    cleaned = cleaned.slice(0, -1).trim()
+  }
+  const val = Number.parseFloat(cleaned)
+  if (!Number.isFinite(val)) return 0
+  if (s === 'k') return Math.round(val * 1_000)
+  if (s === 'm') return Math.round(val * 1_000_000)
+  return Math.round(val)
+}
+
+export function compute30PctRuleTier(
+  contextPct: number
+): 'normal' | 'warning' | 'critical' {
+  if (contextPct >= 30) return 'critical'
+  if (contextPct >= 20) return 'warning'
+  return 'normal'
+}
+
+export interface BrainTokenSnapshot {
+  tokens_used: number
+  tokens_limit: number
+  context_pct: number
+  tier: 'normal' | 'warning' | 'critical'
+  conversation_id: string
+}
+
+let brainTokenCache: {
+  ts: number
+  byPath: Map<string, BrainTokenSnapshot>
+  byAlias: Map<string, BrainTokenSnapshot>
+} | null = null
+const BRAIN_TOKEN_CACHE_TTL_MS = 3_000
+
+const REPO_TO_SESSION_ALIASES: Record<string, string[]> = {
+  'aim-tmux-dashboard': ['aim-dash', 'aim-tmux', 'aim-tmux-dashboard'],
+  'aim-cron-dashboard': ['aim-cron', 'aim-cron-dashboard'],
+  'tbsoftwash-ai-book': ['aim-ai-book', 'tbsoftwash-ai-book'],
+  'aim-tbsoftwash-content': ['aim-tb-content', 'aim-tbsoftwash-content'],
+  'aim-skorbane-content': ['aim-skorbane-media', 'aim-skorbane-content'],
+  'aim-ld-content': ['aim-ld-content'],
+  'aim-auditor': ['aim-auditor', 'grok-audit'],
+}
+
+export function resolveAgyBrainContextMap(): {
+  byPath: Map<string, BrainTokenSnapshot>
+  byAlias: Map<string, BrainTokenSnapshot>
+} {
+  const now = Date.now()
+  if (brainTokenCache && now - brainTokenCache.ts < BRAIN_TOKEN_CACHE_TTL_MS) {
+    return brainTokenCache
+  }
+
+  const byPath = new Map<string, BrainTokenSnapshot>()
+  const byAlias = new Map<string, BrainTokenSnapshot>()
+
+  const pyScript = `
+import sqlite3, json, os, re
+db = "/home/kingb/.gemini/antigravity-cli/conversation_summaries.db"
+if not os.path.isfile(db):
+    print("{}")
+    raise SystemExit(0)
+conn = sqlite3.connect(f"file:{db}?mode=ro", uri=True, timeout=2.0)
+rows = conn.execute("""
+    SELECT conversation_id, workspace_uris
+    FROM conversation_summaries
+    WHERE nesting_depth = 0 AND workspace_uris != "" AND workspace_uris != "[]"
+      AND workspace_uris NOT LIKE "%/scripts%"
+    ORDER BY last_modified_time DESC
+    LIMIT 250
+""").fetchall()
+out = {}
+for cid, ws_raw in rows:
+    try:
+        uris = json.loads(ws_raw) if ws_raw.startswith("[") else [ws_raw]
+    except Exception:
+        uris = [ws_raw]
+    for u in uris:
+        p = re.sub(r"/workspace/issue-[^/]+.*$", "", u.replace("file://", "").rstrip("/"))
+        if not p or p in out:
+            continue
+        tpath = f"/home/kingb/.gemini/antigravity-cli/brain/{cid}/.system_generated/logs/transcript.jsonl"
+        if not os.path.isfile(tpath):
+            continue
+        try:
+            sz = os.path.getsize(tpath)
+            with open(tpath, "rb") as fp:
+                fp.seek(max(0, sz - 65536))
+                tail = fp.read().decode("utf-8", errors="ignore")
+            for ln in reversed(tail.splitlines()):
+                if '"input_tokens"' in ln:
+                    obj = json.loads(ln)
+                    inp = int(obj.get("input_tokens") or 0)
+                    cr = int(obj.get("cache_read_tokens") or 0)
+                    if inp + cr > 0:
+                        out[p] = {"cid": cid, "tokens_used": inp + cr}
+                        break
+        except Exception:
+            pass
+print(json.dumps(out))
+`
+
+  const rawJson = runCmd('python3', ['-c', pyScript], 2500).trim()
+  if (rawJson.startsWith('{')) {
+    try {
+      const parsed = JSON.parse(rawJson) as Record<
+        string,
+        { cid: string; tokens_used: number }
+      >
+      for (const [wsPath, info] of Object.entries(parsed)) {
+        const tokensUsed = Number(info.tokens_used || 0)
+        if (tokensUsed <= 0) continue
+        const tokensLimit = 1_000_000
+        const contextPct = Math.min(
+          100,
+          Math.round((tokensUsed / tokensLimit) * 1000) / 10
+        )
+        const snap: BrainTokenSnapshot = {
+          tokens_used: tokensUsed,
+          tokens_limit: tokensLimit,
+          context_pct: contextPct,
+          tier: compute30PctRuleTier(contextPct),
+          conversation_id: String(info.cid || ''),
+        }
+        byPath.set(wsPath, snap)
+        const base = path.basename(wsPath).toLowerCase()
+        if (!byAlias.has(base)) {
+          byAlias.set(base, snap)
+        }
+        const aliases = REPO_TO_SESSION_ALIASES[base] || []
+        for (const a of aliases) {
+          if (!byAlias.has(a)) {
+            byAlias.set(a, snap)
+          }
+        }
+      }
+    } catch {
+      // Ignore parse error
+    }
+  }
+
+  brainTokenCache = { ts: now, byPath, byAlias }
+  return brainTokenCache
+}
+
 export function parsePaneScrollbackTelemetry(
   scrollback: string,
-  command: string,
-  sessionName: string
+  command = '',
+  sessionName = ''
 ): {
   vessel: string
   status: string
+  tokens_used: number
+  tokens_limit: number
   context_pct: number
+  tier: 'normal' | 'warning' | 'critical'
   preview: string
 } {
+  const cleanText = (scrollback || '').replace(ANSI_ESCAPE_RE, '')
   const cmdLower = (command || '').toLowerCase()
-  const sessLower = sessionName.toLowerCase()
+  const sessLower = (sessionName || '').toLowerCase()
+
+  const agyMatches = Array.from(cleanText.matchAll(AGY_TOKENS_RE))
+  const slashMatches = Array.from(cleanText.matchAll(SLASH_TOKENS_RE))
+  const genericMatches = Array.from(cleanText.matchAll(GENERIC_TOKENS_RE))
+  const explicitPctMatches = Array.from(cleanText.matchAll(EXPLICIT_PCT_RE))
+
   let vessel = 'shell'
-  if (cmdLower.includes('agy') || sessLower.startsWith('aim-') || sessLower.startsWith('agy')) {
+  if (sessLower.includes('audit')) {
+    vessel = 'auditor'
+  } else if (
+    cmdLower.includes('agy') ||
+    cmdLower.includes('antigravity') ||
+    cleanText.includes('Gemini ') ||
+    cleanText.includes('Ctrl+P commands') ||
+    agyMatches.length > 0 ||
+    sessLower.startsWith('aim-') ||
+    sessLower.startsWith('agy')
+  ) {
     vessel = 'agy'
   }
-  if (cmdLower.includes('grok') || sessLower.includes('grok')) {
+  if (cmdLower.includes('grok') || sessLower.includes('grok') || cleanText.includes('Grok CLI')) {
     vessel = 'grok'
   }
-  if (cmdLower.includes('opencode') || sessLower.includes('opencode')) {
+  if (
+    cmdLower.includes('opencode') ||
+    sessLower.includes('opencode') ||
+    cleanText.includes('OpenCode')
+  ) {
     vessel = 'opencode'
   }
   if (cmdLower.includes('codex') || sessLower.includes('codex')) {
     vessel = 'codex'
   }
-  if (sessLower.includes('audit')) {
-    vessel = 'auditor'
+
+  let tokensUsed = 0
+  let tokensLimit = vessel === 'agy' || vessel === 'auditor' ? 1_000_000 : 200_000
+
+  if (agyMatches.length > 0) {
+    const last = agyMatches[agyMatches.length - 1]
+    tokensUsed = parseTokenNumber(last[1], last[2])
+    tokensLimit = 1_000_000
+  } else if (slashMatches.length > 0) {
+    const last = slashMatches[slashMatches.length - 1]
+    tokensUsed = parseTokenNumber(last[1], last[2])
+    const parsedLimit = parseTokenNumber(last[3], last[4])
+    if (parsedLimit > 0) tokensLimit = parsedLimit
+  } else if (genericMatches.length > 0) {
+    const last = genericMatches[genericMatches.length - 1]
+    tokensUsed = parseTokenNumber(last[1])
+  } else if (explicitPctMatches.length > 0) {
+    const last = explicitPctMatches[explicitPctMatches.length - 1]
+    const pctVal = Number.parseFloat(last[1])
+    if (Number.isFinite(pctVal) && pctVal > 0 && pctVal <= 100) {
+      tokensUsed = Math.round((pctVal / 100) * tokensLimit)
+    }
   }
 
-  const lines = scrollback
+  const contextPct =
+    tokensUsed > 0 && tokensLimit > 0
+      ? Math.min(100, Math.round((tokensUsed / tokensLimit) * 1000) / 10)
+      : 0.0
+  const tier = compute30PctRuleTier(contextPct)
+
+  const lines = cleanText
     .split('\n')
     .map((l) => l.trim())
     .filter((l) => l.length > 0 && !/^[─━═]+$/.test(l))
 
-  let contextPct = 12
-  const pctMatch = scrollback.match(/(\d{1,2}(?:\.\d+)?)\s*%\s*(?:context|ctx|used)?/i)
-  const tokenInMatch = scrollback.match(/(\d+(?:\.\d+)?)k\s+in\b/i)
-  if (tokenInMatch) {
-    const kTokens = parseFloat(tokenInMatch[1])
-    contextPct = Math.min(99, Math.round((kTokens / 200) * 1000) / 10)
-  } else if (pctMatch) {
-    const val = parseFloat(pctMatch[1])
-    if (val > 0 && val <= 100) contextPct = val
-  }
-
-  const tailText = lines.slice(-8).join('\n')
+  const tailText = lines.slice(-12).join('\n')
   let status = 'IDLE'
   if (contextPct >= 30) {
     status = 'AMNESIA'
-  } else if (/Generating|Working|Thinking|Running|●\s+\w+\(/i.test(tailText)) {
+  } else if (
+    /[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏⢿⣻⣽⣾⣷⣯⣟]/.test(tailText) ||
+    /Generating|Working\.{2,}|Thinking\.{2,}|Running command|Executing|●\s+\w+\(/i.test(tailText)
+  ) {
     status = 'TOOL_EXEC'
   } else if (/yes\/no|\?\s*$|Proceed|confirm/i.test(tailText)) {
     status = 'WAITING'
-  } else if (lines.length > 0) {
+  } else if (/esc to cancel|ctrl\+c to interrupt/i.test(tailText)) {
     status = 'THINKING'
   }
 
@@ -242,47 +446,106 @@ export function parsePaneScrollbackTelemetry(
   return {
     vessel,
     status,
+    tokens_used: tokensUsed,
+    tokens_limit: tokensLimit,
     context_pct: contextPct,
+    tier,
     preview,
   }
 }
 
 export function collectLocalTmuxFleet(): LocalFleetSessionRecord[] {
   const fmt =
-    '#{session_name}@@@#{pane_current_command}@@@#{pane_current_path}@@@#{session_attached}'
+    '#{session_name}@@@#{window_index}@@@#{pane_index}@@@#{pane_current_command}@@@#{pane_current_path}@@@#{session_attached}'
   const raw = runCmd('tmux', ['list-panes', '-a', '-F', fmt], 3000)
   if (!raw.trim()) return []
 
-  const seen = new Set<string>()
-  const fleet: LocalFleetSessionRecord[] = []
+  const brainMap = resolveAgyBrainContextMap()
 
+  interface RawPaneCandidate {
+    sessionName: string
+    target: string
+    cmd: string
+    panePath: string
+    attached: boolean
+    isAiCmd: boolean
+  }
+
+  const bySession = new Map<string, RawPaneCandidate[]>()
   for (const line of raw.split('\n')) {
     if (!line.trim()) continue
-    const [sessionName, cmd, panePath, attachedStr] = line.split('@@@')
-    if (!sessionName || seen.has(sessionName) || sessionName.startsWith('aim-client-')) {
+    const [sessionName, winIdx, paneIdx, cmd, panePath, attachedStr] = line.split('@@@')
+    if (
+      !sessionName ||
+      sessionName.startsWith('aim-client-') ||
+      sessionName.startsWith('agent-')
+    ) {
       continue
     }
-    seen.add(sessionName)
+    const cmdLower = (cmd || '').toLowerCase()
+    const isAiCmd =
+      cmdLower.includes('agy') ||
+      cmdLower.includes('grok') ||
+      cmdLower.includes('opencode') ||
+      cmdLower.includes('codex')
+    const list = bySession.get(sessionName) ?? []
+    list.push({
+      sessionName,
+      target: `${sessionName}:${winIdx || '0'}.${paneIdx || '0'}`,
+      cmd: cmd || 'bash',
+      panePath: panePath || '',
+      attached: attachedStr === '1',
+      isAiCmd,
+    })
+    bySession.set(sessionName, list)
+  }
 
-    const cap = runCmd('tmux', ['capture-pane', '-t', sessionName, '-p', '-J', '-S', '-25'], 1500)
-    const telemetry = parsePaneScrollbackTelemetry(cap, cmd || '', sessionName)
-    const mainRoot = resolveMainRepoRoot(panePath || '')
-    const repoName = path.basename(mainRoot || panePath || sessionName)
-    const branch = readGitBranchFast(panePath || '')
-    const { projectNumber, repo } = readRepoProjectConfig(panePath || '', sessionName)
+  const fleet: LocalFleetSessionRecord[] = []
+
+  for (const [sessionName, candidates] of bySession.entries()) {
+    // Prefer the pane running an AI vessel CLI over auxiliary dev-server/shell windows
+    const primary = candidates.find((c) => c.isAiCmd) ?? candidates[0]
+    const cap = runCmd(
+      'tmux',
+      ['capture-pane', '-t', primary.target, '-p', '-J', '-S', '-80'],
+      1500
+    )
+    const telemetry = parsePaneScrollbackTelemetry(cap, primary.cmd, sessionName)
+    const mainRoot = resolveMainRepoRoot(primary.panePath)
+    const repoName = path.basename(mainRoot || primary.panePath || sessionName)
+    const branch = readGitBranchFast(primary.panePath)
+    const { projectNumber, repo } = readRepoProjectConfig(primary.panePath, sessionName)
+
+    // Enrich with exact API-reported brain transcript tokens (input_tokens + cache_read_tokens)
+    const brainSnap =
+      brainMap.byPath.get(mainRoot) ??
+      brainMap.byAlias.get(sessionName.toLowerCase()) ??
+      brainMap.byAlias.get(repoName.toLowerCase())
+
+    const tokensUsed =
+      brainSnap && brainSnap.tokens_used > 0 ? brainSnap.tokens_used : telemetry.tokens_used
+    const tokensLimit =
+      brainSnap && brainSnap.tokens_limit > 0 ? brainSnap.tokens_limit : telemetry.tokens_limit
+    const contextPct =
+      brainSnap && brainSnap.tokens_used > 0 ? brainSnap.context_pct : telemetry.context_pct
+    const tier = compute30PctRuleTier(contextPct)
+    const finalStatus = contextPct >= 30 ? 'AMNESIA' : telemetry.status
 
     fleet.push({
       session_name: sessionName,
       vessel: telemetry.vessel,
-      status: telemetry.status,
-      command: cmd || 'bash',
-      path: panePath || '',
+      status: finalStatus,
+      command: primary.cmd,
+      path: primary.panePath,
       repo_name: repoName,
       branch,
-      is_worktree: (panePath || '').includes('/workspace/issue-'),
-      context_pct: telemetry.context_pct,
+      is_worktree: primary.panePath.includes('/workspace/issue-'),
+      tokens_used: tokensUsed,
+      tokens_limit: tokensLimit,
+      context_pct: contextPct,
+      tier,
       preview: telemetry.preview,
-      attached: attachedStr === '1',
+      attached: candidates.some((c) => c.attached),
       project_number: projectNumber,
       project_repo: repo || `BrianV1981/${repoName}`,
     })

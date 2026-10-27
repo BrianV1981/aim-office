@@ -236,8 +236,13 @@ export const CharacterActor: React.FC<CharacterActorProps> = ({
         >
           <div
             className={`context-bar-fill severity-${character.context.severity}`}
-            style={{ width: `${Math.min(100, Math.max(6, character.context.pct))}%` }}
+            style={{
+              width: `${
+                character.context.pct > 0 ? Math.min(100, Math.max(3, character.context.pct)) : 0
+              }%`,
+            }}
           />
+          <span className="context-threshold-tick" style={{ left: '30%' }} />
         </div>
       </div>
     </div>

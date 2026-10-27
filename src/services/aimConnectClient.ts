@@ -291,6 +291,18 @@ function buildHeaders(apiToken?: string): HeadersInit {
     : { 'Content-Type': 'application/json' }
 }
 
+export function formatTokenCountCompact(tokensUsed?: number, tokenBudget?: number): string {
+  const used = Number(tokensUsed || 0)
+  const budget = Number(tokenBudget || 1_000_000)
+  const fmt = (n: number) =>
+    n >= 1_000_000
+      ? `${Math.round((n / 1_000_000) * 10) / 10}M`
+      : n >= 1_000
+        ? `${Math.round(n / 1_000)}k`
+        : `${n}`
+  return `${fmt(used)}/${fmt(budget)}`
+}
+
 export function parseFleetPanesResponse(raw: unknown): FleetPaneRecord[] {
   if (!raw || typeof raw !== 'object') return []
   const data = raw as Record<string, unknown>
@@ -310,14 +322,26 @@ export function parseFleetPanesResponse(raw: unknown): FleetPaneRecord[] {
     if (!sessionName || seen.has(sessionName)) continue
     seen.add(sessionName)
 
+    const vessel = normalizeVesselType(String(rec.vessel ?? ''), sessionName)
+    const defaultLimit = vessel === 'AGY' || vessel === 'Auditor' ? 1_000_000 : 200_000
+
     const nestedCtx =
       rec.context && typeof rec.context === 'object'
         ? (rec.context as Record<string, unknown>)
         : null
-    const rawPct = Number(nestedCtx?.pct ?? rec.context_pct ?? 0)
+    const tokensUsed = Number(
+      nestedCtx?.tokensUsed ?? nestedCtx?.tokens_used ?? rec.tokens_used ?? 0
+    )
+    const tokenBudget = Number(
+      nestedCtx?.tokenBudget ?? nestedCtx?.tokens_limit ?? rec.tokens_limit ?? defaultLimit
+    )
+    const rawPct = Number(
+      nestedCtx?.pct ??
+        rec.context_pct ??
+        (tokensUsed > 0 && tokenBudget > 0 ? (tokensUsed / tokenBudget) * 100 : 0)
+    )
     const pct = Number.isFinite(rawPct) ? Math.max(0, Math.round(rawPct * 10) / 10) : 0
     const severity = computeContextSeverity(pct)
-    const vessel = normalizeVesselType(String(rec.vessel ?? ''), sessionName)
     const status = normalizeOperationalStatus(String(rec.status ?? 'IDLE'), pct)
 
     records.push({
@@ -327,8 +351,8 @@ export function parseFleetPanesResponse(raw: unknown): FleetPaneRecord[] {
       context: {
         pct,
         severity,
-        tokensUsed: Number(rec.tokens_used ?? 0),
-        tokenBudget: Number(rec.tokens_limit ?? 200000),
+        tokensUsed: Number.isFinite(tokensUsed) ? Math.max(0, tokensUsed) : 0,
+        tokenBudget: Number.isFinite(tokenBudget) && tokenBudget > 0 ? tokenBudget : defaultLimit,
       },
       branch: String(rec.branch ?? 'main') || 'main',
       path: String(rec.path ?? ''),

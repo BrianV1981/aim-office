@@ -3,6 +3,7 @@ import { OfficeCharacter } from '../office/types'
 import {
   AimConnectClient,
   defaultAimConnectClient,
+  formatTokenCountCompact,
   SessionForensicsPayload,
   SessionOutputPayload,
   WorkspaceContextPayload,
@@ -371,14 +372,24 @@ export const AgentInspectorDrawer: React.FC<AgentInspectorDrawerProps> = ({
               className={`pct-readout severity-${character.context.severity}`}
               data-testid="inspector-context-pct"
             >
-              {character.context.pct}% {isAmnesia ? '🔥 AMNESIA ALERT' : ''}
+              {character.context.pct}% (
+              {formatTokenCountCompact(character.context.tokensUsed, character.context.tokenBudget)}
+              ) {isAmnesia ? '🔥 AMNESIA ALERT' : ''}
             </strong>
           </div>
-          <div className="inspector-context-bar-track">
+          <div
+            className="inspector-context-bar-track"
+            title="30%-Rule Recall Envelope: green < 22%, amber 22-29%, red >= 30%"
+          >
             <div
               className={`inspector-context-bar-fill severity-${character.context.severity}`}
-              style={{ width: `${Math.min(100, Math.max(4, character.context.pct))}%` }}
+              style={{
+                width: `${
+                  character.context.pct > 0 ? Math.min(100, Math.max(2, character.context.pct)) : 0
+                }%`,
+              }}
             />
+            <span className="context-threshold-tick" style={{ left: '30%' }} />
           </div>
           <p className="context-hint">
             {isAmnesia
