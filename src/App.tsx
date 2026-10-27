@@ -12,6 +12,7 @@ import {
 import {
   addCatalogPropToLayout,
   applyCustomLayoutToRoom,
+  assignIdleHangoutsToCharacters,
   loadCustomLayoutMap,
   removePlacedPropFromLayout,
   resetThemeLayout,
@@ -44,6 +45,7 @@ export const App: React.FC = () => {
     loadCustomLayoutMap()
   )
   const [isBuildMode, setIsBuildMode] = useState<boolean>(false)
+  const [idleHangoutsEnabled, setIdleHangoutsEnabled] = useState<boolean>(true)
   const [selectedFurnitureId, setSelectedFurnitureId] = useState<string | null>(null)
 
   const activeThemePack = useMemo(() => getOfficeThemePack(activeThemeId), [activeThemeId])
@@ -98,8 +100,18 @@ export const App: React.FC = () => {
         zIndexOverride: spot.zIndexOverride,
       }
     })
-    return buildFullStaffRosterCharacters(alignedLive, customizedRoom, showFullRoster)
-  }, [characters, customizedRoom, showFullRoster])
+    const fullRoster = buildFullStaffRosterCharacters(
+      alignedLive,
+      customizedRoom,
+      showFullRoster
+    )
+    return assignIdleHangoutsToCharacters(
+      fullRoster,
+      customizedRoom,
+      idleHangoutsEnabled,
+      activeThemeId
+    )
+  }, [characters, customizedRoom, showFullRoster, idleHangoutsEnabled, activeThemeId])
 
   const selectedFurniture = useMemo<FurnitureAsset | null>(
     () => customizedRoom.furniture.find((f) => f.id === selectedFurnitureId) ?? null,
@@ -207,8 +219,10 @@ export const App: React.FC = () => {
         boardLabel={boardLabel}
         isStaffRosterOpen={isStaffRosterOpen}
         isBuildMode={isBuildMode}
+        idleHangoutsEnabled={idleHangoutsEnabled}
         onToggleStaffRoster={() => setIsStaffRosterOpen((o) => !o)}
         onToggleBuildMode={() => setIsBuildMode((b) => !b)}
+        onToggleIdleHangouts={() => setIdleHangoutsEnabled((h) => !h)}
         onSelectTheme={handleSelectTheme}
         onToggleLighting={() => setLightingMode((m) => (m === 'day' ? 'night' : 'day'))}
         onTriggerCourierDemo={() =>

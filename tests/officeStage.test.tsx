@@ -20,6 +20,7 @@ import { OfficeStage } from '../src/components/OfficeStage'
 import {
   addCatalogPropToLayout,
   applyCustomLayoutToRoom,
+  assignIdleHangoutsToCharacters,
   collectRoomHangoutSpots,
   removePlacedPropFromLayout,
   resetThemeLayout,
@@ -381,5 +382,97 @@ describe('AIM-Office Isometric 2.5D Engine, Elastic 4-Way Quad Pods, Pan/Zoom & 
 
     layoutMap = resetThemeLayout(layoutMap, 'classic-command')
     expect(layoutMap['classic-command']).toBeUndefined()
+  })
+
+  it('routes IDLE agents to Smart Furniture HangoutSpots and returns active agents immediately to their desks (#18)', () => {
+    const customized = applyCustomLayoutToRoom(
+      COMMAND_OFFICE_ROOM,
+      'classic-command',
+      {}
+    )
+    const testChars: OfficeCharacter[] = [
+      {
+        id: 'c-boss',
+        sessionName: 'aim-joshua',
+        displayName: 'J.O.S.H.U.A.',
+        roleTitle: 'Boss',
+        vessel: 'AGY',
+        archetype: 'boss-joshua',
+        status: 'IDLE',
+        context: { pct: 4, severity: 'green' },
+        deskSpotId: 'spot-boss',
+        currentWaypointId: 'wp-boss-desk',
+        position: { x: 45.55, y: 49.15 },
+        targetWaypoints: [],
+        facing: 'front-right',
+      },
+      {
+        id: 'c-idle-1',
+        sessionName: 'aim-ld',
+        displayName: 'aim-ld',
+        roleTitle: 'LeadDeeds',
+        vessel: 'AGY',
+        archetype: 'agent-leaddeeds',
+        status: 'IDLE',
+        context: { pct: 8, severity: 'green' },
+        deskSpotId: 'spot-2',
+        currentWaypointId: 'wp-desk-2',
+        position: { x: 53.45, y: 49.15 },
+        targetWaypoints: [],
+        facing: 'front-left',
+      },
+      {
+        id: 'c-idle-2',
+        sessionName: 'aim-tbsoftwash',
+        displayName: 'aim-tbsoftwash',
+        roleTitle: 'TBSoftwash',
+        vessel: 'AGY',
+        archetype: 'agent-tbsoftwash',
+        status: 'IDLE',
+        context: { pct: 7, severity: 'green' },
+        deskSpotId: 'spot-3',
+        currentWaypointId: 'wp-desk-3',
+        position: { x: 45.55, y: 54.85 },
+        targetWaypoints: [],
+        facing: 'rear-right',
+      },
+    ]
+
+    const withHangouts = assignIdleHangoutsToCharacters(
+      testChars,
+      customized,
+      true,
+      'classic-command'
+    )
+    // Boss Joshua stays at spot-boss
+    expect(withHangouts[0].hangoutSpotId).toBeUndefined()
+    // Idle agents move to HangoutSpots (coffee bar / lounge sofa / smoke stand)
+    expect(withHangouts[1].hangoutSpotId).toBeDefined()
+    expect(withHangouts[1].idleEmote).toBeDefined()
+    expect(withHangouts[2].hangoutSpotId).toBeDefined()
+
+    // When aim-ld transitions to TOOL_EXEC, it immediately returns to its assigned desk (spot-2)
+    const activeChars = testChars.map((c) =>
+      c.sessionName === 'aim-ld' ? { ...c, status: 'TOOL_EXEC' as const } : c
+    )
+    const afterWake = assignIdleHangoutsToCharacters(
+      activeChars,
+      customized,
+      true,
+      'classic-command'
+    )
+    const spot2 = customized.workstations.find((w) => w.id === 'spot-2')!
+    expect(afterWake[1].hangoutSpotId).toBeUndefined()
+    expect(afterWake[1].position).toEqual({ x: spot2.x, y: spot2.y })
+
+    // Disabling hangouts returns all IDLE agents to their desks
+    const disabledHangouts = assignIdleHangoutsToCharacters(
+      testChars,
+      customized,
+      false,
+      'classic-command'
+    )
+    expect(disabledHangouts[1].hangoutSpotId).toBeUndefined()
+    expect(disabledHangouts[2].hangoutSpotId).toBeUndefined()
   })
 })

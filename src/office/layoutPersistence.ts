@@ -4,6 +4,7 @@ import {
   HangoutSpot,
   IdleActivityEmote,
   IsometricRoom,
+  OfficeCharacter,
   SpriteFacing,
   ThemePackId,
 } from './types'
@@ -498,4 +499,101 @@ export function collectRoomHangoutSpots(room: IsometricRoom): HangoutSpot[] {
     }
   }
   return spots
+}
+
+/**
+ * Sims-style Idle Agent Hangouts (#18):
+ * - When `idleHangoutsEnabled` is true, IDLE agents (excluding `aim-joshua` at the Boss Desk)
+ *   gather at available Smart Furniture HangoutSpots (coffee bar, lounge sofa, smoke stand,
+ *   cyber-vape pod, water cooler, arcade cabinet) with matching `idleEmote` and `isSeated` flags.
+ * - Any agent that transitions to THINKING, TOOL_EXEC, WAITING, AMNESIA, or COURIER
+ *   immediately returns to their assigned workstation desk.
+ */
+export function assignIdleHangoutsToCharacters(
+  characters: OfficeCharacter[],
+  room: IsometricRoom,
+  idleHangoutsEnabled = true,
+  themeId: ThemePackId = 'sovereign-war-room'
+): OfficeCharacter[] {
+  const hangoutSpots = collectRoomHangoutSpots(room)
+  if (!idleHangoutsEnabled || hangoutSpots.length === 0) {
+    return characters.map((char) => {
+      if (char.targetWaypoints.length > 0) return char
+      const deskSpot = room.workstations.find((w) => w.id === char.deskSpotId)
+      return {
+        ...char,
+        position: deskSpot ? { x: deskSpot.x, y: deskSpot.y } : char.position,
+        facing: deskSpot ? deskSpot.defaultFacing : char.facing,
+        zIndexOverride: deskSpot ? deskSpot.zIndexOverride : char.zIndexOverride,
+        idleEmote: undefined,
+        isSeated: false,
+        hangoutSpotId: undefined,
+      }
+    })
+  }
+
+  const defaultDeskIdleEmote: IdleActivityEmote =
+    themeId === 'retro-90s-bullpen'
+      ? 'smoke'
+      : themeId === 'sovereign-war-room'
+        ? 'vape'
+        : 'coffee'
+
+  let hangoutCursor = 0
+
+  return characters.map((char) => {
+    // Active / Courier / Amnesia / Waiting agents or Boss Joshua stay at their workstation (or active walk)
+    const isBoss = char.sessionName === 'aim-joshua' || char.archetype === 'boss-joshua'
+    if (char.targetWaypoints.length > 0 || char.status !== 'IDLE' || isBoss) {
+      const deskSpot = room.workstations.find((w) => w.id === char.deskSpotId)
+      return {
+        ...char,
+        position:
+          char.targetWaypoints.length > 0
+            ? char.position
+            : deskSpot
+              ? { x: deskSpot.x, y: deskSpot.y }
+              : char.position,
+        facing:
+          char.targetWaypoints.length > 0
+            ? char.facing
+            : deskSpot
+              ? deskSpot.defaultFacing
+              : char.facing,
+        zIndexOverride:
+          char.targetWaypoints.length > 0
+            ? char.zIndexOverride
+            : deskSpot?.zIndexOverride,
+        idleEmote: isBoss && char.status === 'IDLE' ? 'coffee' : undefined,
+        isSeated: false,
+        hangoutSpotId: undefined,
+      }
+    }
+
+    if (hangoutCursor < hangoutSpots.length) {
+      const hSpot = hangoutSpots[hangoutCursor++]
+      const depthZ = computeDepthZIndex(hSpot.y)
+      return {
+        ...char,
+        position: { x: hSpot.x, y: hSpot.y },
+        facing: hSpot.facing,
+        zIndexOverride: hSpot.isSeated ? depthZ + 4 : depthZ + 2,
+        idleEmote: hSpot.emote,
+        isSeated: Boolean(hSpot.isSeated),
+        hangoutSpotId: hSpot.id,
+      }
+    }
+
+    // Remaining idle agents stay at their desks with a theme-reactive idle emote
+    const deskSpot = room.workstations.find((w) => w.id === char.deskSpotId)
+    return {
+      ...char,
+      position: deskSpot ? { x: deskSpot.x, y: deskSpot.y } : char.position,
+      facing: deskSpot ? deskSpot.defaultFacing : char.facing,
+      zIndexOverride: deskSpot?.zIndexOverride,
+      idleEmote: defaultDeskIdleEmote,
+      isSeated: false,
+      hangoutSpotId: undefined,
+    }
+  })
 }
