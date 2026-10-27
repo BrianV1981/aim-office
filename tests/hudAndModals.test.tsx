@@ -49,6 +49,7 @@ describe('AIM-Office HUD Command Bar, Forensic Inspector Drawer & Kanban Modal (
     expect(screen.getByTestId('active-agent-count')).toHaveTextContent(
       String(sampleCharacters.length)
     )
+    expect(screen.getByTestId('fleet-readiness-score')).toHaveTextContent('LVL')
     expect(screen.getByTestId('fleet-context-summary')).toHaveTextContent('🔥 1')
 
     const themeSelect = screen.getByTestId('select-theme-pack') as HTMLSelectElement
@@ -83,6 +84,7 @@ describe('AIM-Office HUD Command Bar, Forensic Inspector Drawer & Kanban Modal (
 
     expect(screen.getByTestId('inspector-session-name')).toHaveTextContent('aim-office')
     expect(screen.getByTestId('inspector-context-pct')).toHaveTextContent('18%')
+    expect(screen.getByTestId('dossier-stat-strip')).toHaveTextContent('82% OPTIMAL')
     expect(screen.getByTestId('agent-inspector-drawer')).toHaveAttribute('data-floating', 'true')
     expect(screen.getByTestId('inspector-drag-handle')).toBeInTheDocument()
 

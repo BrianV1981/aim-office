@@ -7,7 +7,7 @@ import {
   WallBoardRectConfig,
 } from '../office/types'
 import { stepAlongWaypoints } from '../office/waypointGraph'
-import { CharacterActor } from './CharacterActor'
+import { ARCHETYPE_PALETTES, CharacterActor } from './CharacterActor'
 import { FurnitureLayer } from './FurnitureLayer'
 import { WallTaskBoard } from './WallTaskBoard'
 import { KanbanTicketItem } from './WhiteboardModal'
@@ -119,6 +119,45 @@ export const OfficeStage: React.FC<OfficeStageProps> = ({
     return set
   }, [characters, elasticRoom.workstations])
 
+  // Featured 8 quick-slot agents for RTS bottom hotbar
+  const quickbarUnits = useMemo(() => {
+    return characters.slice(0, 8)
+  }, [characters])
+
+  // Live telemetry ticker focal agent
+  const tickerAgent = useMemo(() => {
+    if (selectedSession) {
+      const found = characters.find((c) => c.sessionName === selectedSession)
+      if (found) return found
+    }
+    return (
+      characters.find((c) => c.status === 'COURIER') ||
+      characters.find((c) => c.status === 'TOOL_EXEC' || c.status === 'THINKING') ||
+      characters[0] ||
+      null
+    )
+  }, [characters, selectedSession])
+
+  // Keyboard 1..8 unit hotkeys when not typing in an input
+  useEffect(() => {
+    if (!onSelectCharacter || quickbarUnits.length === 0) return
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null
+      if (
+        target &&
+        (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT')
+      ) {
+        return
+      }
+      const num = Number(e.key)
+      if (num >= 1 && num <= 8 && quickbarUnits[num - 1]) {
+        onSelectCharacter(quickbarUnits[num - 1])
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [onSelectCharacter, quickbarUnits])
+
   const handleActivateWallBoard = () => {
     if (onOpenWhiteboard) {
       onOpenWhiteboard()
@@ -139,7 +178,13 @@ export const OfficeStage: React.FC<OfficeStageProps> = ({
   const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
     if (e.button !== 0) return
     const target = e.target as HTMLElement
-    if (target.closest('button') || target.closest('.wall-task-board')) return
+    if (
+      target.closest('button') ||
+      target.closest('.wall-task-board') ||
+      target.closest('.tactical-bottom-dock')
+    ) {
+      return
+    }
     setIsDragging(true)
     dragOriginRef.current = {
       startX: e.clientX,
@@ -182,25 +227,15 @@ export const OfficeStage: React.FC<OfficeStageProps> = ({
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseUp}
-      style={{
-        position: 'relative',
-        width: '100%',
-        maxWidth: `${elasticRoom.logicalWidth}px`,
-        aspectRatio: `${elasticRoom.logicalWidth} / ${elasticRoom.logicalHeight}`,
-        margin: '0 auto',
-        overflow: 'hidden',
-        cursor: isDragging ? 'grabbing' : 'grab',
-      }}
     >
-      {/* Pan & Zoom Camera Transform Plane */}
+      {/* Ambient Tactical Grid & Scanline Backdrop */}
+      <div className="tactical-viewport-grid-backdrop" aria-hidden="true" />
+
+      {/* Pan & Zoom Camera Transform Plane (Edge-to-Edge Responsive 16:9 Stage) */}
       <div
         className="office-camera-plane"
         data-testid="office-camera-plane"
         style={{
-          position: 'absolute',
-          inset: 0,
-          width: '100%',
-          height: '100%',
           backgroundImage: !bgFailed ? `url(${bgUrl})` : undefined,
           backgroundSize: '100% 100%',
           backgroundRepeat: 'no-repeat',
@@ -264,7 +299,7 @@ export const OfficeStage: React.FC<OfficeStageProps> = ({
           </svg>
         </div>
 
-        {/* Layer 1.5: Perspective-Skewed Wall TaskBoard (Office & Cutaway Agency themes only; omitted in War Room when wallBoardRect === null) */}
+        {/* Layer 1.5: Perspective-Skewed Wall TaskBoard */}
         {wallBoardRect !== null && (
           <WallTaskBoard
             tickets={tickets}
@@ -282,7 +317,7 @@ export const OfficeStage: React.FC<OfficeStageProps> = ({
           onFurnitureClick={onSelectFurniture}
         />
 
-        {/* Layer 3: Depth-Sorted 4-Direction Isometric Characters (with Front/Rear Pod Occlusion) */}
+        {/* Layer 3: Depth-Sorted 4-Direction Isometric Characters */}
         <div className="office-characters-layer" data-testid="characters-layer">
           {characters.map((character) => (
             <CharacterActor
@@ -295,38 +330,98 @@ export const OfficeStage: React.FC<OfficeStageProps> = ({
         </div>
       </div>
 
-      {/* Camera Zoom / Pan HUD Overlay */}
-      <div className="office-camera-controls" data-testid="office-camera-controls">
-        <button
-          type="button"
-          className="camera-ctrl-btn"
-          data-testid="btn-zoom-out"
-          title="Zoom Out"
-          onClick={() => setZoom((z) => clampCameraZoom(z - 0.15))}
-        >
-          −
-        </button>
-        <span className="camera-zoom-readout" data-testid="camera-zoom-readout">
-          {Math.round(zoom * 100)}%
-        </span>
-        <button
-          type="button"
-          className="camera-ctrl-btn"
-          data-testid="btn-zoom-in"
-          title="Zoom In"
-          onClick={() => setZoom((z) => clampCameraZoom(z + 0.15))}
-        >
-          +
-        </button>
-        <button
-          type="button"
-          className="camera-ctrl-btn btn-reset"
-          data-testid="btn-reset-camera"
-          title="Reset Camera Zoom & Pan"
-          onClick={handleResetCamera}
-        >
-          Reset Camera
-        </button>
+      {/* Bottom Tactical HUD Dock: Live Telemetry Feed + RTS Squad Quick-Select Hotbar + Camera Gimbal */}
+      <div className="tactical-bottom-dock" data-testid="tactical-bottom-dock">
+        {/* Bottom-Left Live Ops Telemetry Ticker */}
+        <div className="live-telemetry-ticker" data-testid="live-telemetry-ticker">
+          <span className="ticker-pulse-dot" />
+          <span className="ticker-tag">OPS FEED</span>
+          {tickerAgent ? (
+            <span className="ticker-message">
+              <strong>{tickerAgent.sessionName}</strong> ·{' '}
+              {tickerAgent.activeToolPill || tickerAgent.status} · {tickerAgent.context.pct}% CTX
+            </span>
+          ) : (
+            <span className="ticker-message">All sectors nominal</span>
+          )}
+        </div>
+
+        {/* Bottom-Center RTS Quick-Select Squad Hotbar (1-8) */}
+        {quickbarUnits.length > 0 && (
+          <div className="squad-quick-hotbar" data-testid="squad-quick-hotbar">
+            {quickbarUnits.map((unit, idx) => {
+              const isSelected = selectedSession === unit.sessionName
+              const isAmnesia = unit.context.pct >= 30 || unit.status === 'AMNESIA'
+              const palette = ARCHETYPE_PALETTES[unit.archetype] ?? ARCHETYPE_PALETTES['vessel-agy']
+              return (
+                <button
+                  key={unit.id}
+                  type="button"
+                  className={`hotbar-unit-slot${isSelected ? ' is-selected' : ''}${
+                    isAmnesia ? ' is-amnesia' : ''
+                  }`}
+                  data-testid={`hotbar-slot-${unit.sessionName}`}
+                  onClick={() => onSelectCharacter?.(unit)}
+                  title={`[${idx + 1}] ${unit.sessionName} — ${unit.roleTitle} (${unit.context.pct}% context)`}
+                >
+                  <span className="hotbar-keybind">{idx + 1}</span>
+                  <span className="hotbar-rank-badge">{palette.rank}</span>
+                  <div className="hotbar-portrait-frame">
+                    <img
+                      src={`/sprites/characters/${unit.archetype}-front-left.png`}
+                      alt={unit.displayName}
+                      className="hotbar-portrait-img"
+                      onError={(e) => {
+                        ;(e.currentTarget as HTMLImageElement).style.display = 'none'
+                      }}
+                    />
+                  </div>
+                  <span className="hotbar-unit-name">{unit.sessionName.replace(/^aim-/, '')}</span>
+                  <div className="hotbar-mini-bar">
+                    <div
+                      className={`hotbar-mini-fill severity-${unit.context.severity}`}
+                      style={{ width: `${Math.min(100, Math.max(8, unit.context.pct))}%` }}
+                    />
+                  </div>
+                </button>
+              )
+            })}
+          </div>
+        )}
+
+        {/* Bottom-Right Camera Zoom / Pan HUD Overlay */}
+        <div className="office-camera-controls" data-testid="office-camera-controls">
+          <button
+            type="button"
+            className="camera-ctrl-btn"
+            data-testid="btn-zoom-out"
+            title="Zoom Out"
+            onClick={() => setZoom((z) => clampCameraZoom(z - 0.15))}
+          >
+            −
+          </button>
+          <span className="camera-zoom-readout" data-testid="camera-zoom-readout">
+            {Math.round(zoom * 100)}%
+          </span>
+          <button
+            type="button"
+            className="camera-ctrl-btn"
+            data-testid="btn-zoom-in"
+            title="Zoom In"
+            onClick={() => setZoom((z) => clampCameraZoom(z + 0.15))}
+          >
+            +
+          </button>
+          <button
+            type="button"
+            className="camera-ctrl-btn btn-reset"
+            data-testid="btn-reset-camera"
+            title="Reset Camera Zoom & Pan"
+            onClick={handleResetCamera}
+          >
+            Reset Camera
+          </button>
+        </div>
       </div>
     </div>
   )

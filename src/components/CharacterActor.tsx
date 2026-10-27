@@ -10,30 +10,30 @@ export interface CharacterActorProps {
   onSelect?: (character: OfficeCharacter) => void
 }
 
-const ARCHETYPE_PALETTES: Record<
+export const ARCHETYPE_PALETTES: Record<
   string,
-  { primary: string; trim: string; visor: string; badge: string }
+  { primary: string; trim: string; visor: string; badge: string; rank: string }
 > = {
-  'boss-joshua': { primary: '#fbbf24', trim: '#1e293b', visor: '#38bdf8', badge: '👑' },
-  'vessel-agy': { primary: '#06b6d4', trim: '#312e81', visor: '#67e8f9', badge: '⚡' },
-  'vessel-grok': { primary: '#e11d48', trim: '#18181b', visor: '#fda4af', badge: '🚀' },
-  'vessel-opencode': { primary: '#10b981', trim: '#064e3b', visor: '#6ee7b7', badge: '🧩' },
-  'vessel-codex': { primary: '#f59e0b', trim: '#451a03', visor: '#fde68a', badge: '📐' },
-  'vessel-auditor': { primary: '#eab308', trim: '#422006', visor: '#fef08a', badge: '🛡️' },
-  'agent-leaddeeds': { primary: '#2563eb', trim: '#1e3a8a', visor: '#93c5fd', badge: '🏠' },
-  'agent-ld-content': { primary: '#9f1239', trim: '#4c0519', visor: '#fda4af', badge: '✍️' },
-  'agent-tbsoftwash': { primary: '#0d9488', trim: '#134e4a', visor: '#5eead4', badge: '💦' },
-  'agent-tb-content': { primary: '#f97316', trim: '#7c2d12', visor: '#fdba74', badge: '🎬' },
-  'agent-ai-book': { primary: '#15803d', trim: '#14532d', visor: '#86efac', badge: '📚' },
-  'agent-skorbane': { primary: '#7e22ce', trim: '#3b0764', visor: '#d8b4fe', badge: '⚔️' },
-  'agent-skorbane-media': { primary: '#a855f7', trim: '#581c87', visor: '#e9d5ff', badge: '🔮' },
-  'agent-youtube': { primary: '#dc2626', trim: '#7f1d1d', visor: '#fca5a5', badge: '▶️' },
-  'agent-gbp': { primary: '#34d399', trim: '#065f46', visor: '#a7f3d0', badge: '📍' },
-  'agent-calendar': { primary: '#64748b', trim: '#1e293b', visor: '#bae6fd', badge: '⏱️' },
-  'agent-ayrianna': { primary: '#0ea5e9', trim: '#0f172a', visor: '#38bdf8', badge: '🛰️' },
-  'agent-cron': { primary: '#d97706', trim: '#451a03', visor: '#fcd34d', badge: '🤖' },
-  'agent-tmux': { primary: '#475569', trim: '#0f172a', visor: '#94a3b8', badge: '🖥️' },
-  'agent-connect': { primary: '#3b82f6', trim: '#172554', visor: '#bfdbfe', badge: '📡' },
+  'boss-joshua': { primary: '#fbbf24', trim: '#1e293b', visor: '#38bdf8', badge: '👑', rank: 'CMD' },
+  'vessel-agy': { primary: '#06b6d4', trim: '#312e81', visor: '#67e8f9', badge: '⚡', rank: 'ENG' },
+  'vessel-grok': { primary: '#e11d48', trim: '#18181b', visor: '#fda4af', badge: '🚀', rank: 'OPS' },
+  'vessel-opencode': { primary: '#10b981', trim: '#064e3b', visor: '#6ee7b7', badge: '🧩', rank: 'SYS' },
+  'vessel-codex': { primary: '#f59e0b', trim: '#451a03', visor: '#fde68a', badge: '📐', rank: 'ARC' },
+  'vessel-auditor': { primary: '#eab308', trim: '#422006', visor: '#fef08a', badge: '🛡️', rank: 'SEC' },
+  'agent-leaddeeds': { primary: '#2563eb', trim: '#1e3a8a', visor: '#93c5fd', badge: '🏠', rank: 'ACQ' },
+  'agent-ld-content': { primary: '#9f1239', trim: '#4c0519', visor: '#fda4af', badge: '✍️', rank: 'PUB' },
+  'agent-tbsoftwash': { primary: '#0d9488', trim: '#134e4a', visor: '#5eead4', badge: '💦', rank: 'OPS' },
+  'agent-tb-content': { primary: '#f97316', trim: '#7c2d12', visor: '#fdba74', badge: '🎬', rank: 'MED' },
+  'agent-ai-book': { primary: '#15803d', trim: '#14532d', visor: '#86efac', badge: '📚', rank: 'PUB' },
+  'agent-skorbane': { primary: '#7e22ce', trim: '#3b0764', visor: '#d8b4fe', badge: '⚔️', rank: 'LORE' },
+  'agent-skorbane-media': { primary: '#a855f7', trim: '#581c87', visor: '#e9d5ff', badge: '🔮', rank: 'VFX' },
+  'agent-youtube': { primary: '#dc2626', trim: '#7f1d1d', visor: '#fca5a5', badge: '▶️', rank: 'VID' },
+  'agent-gbp': { primary: '#34d399', trim: '#065f46', visor: '#a7f3d0', badge: '📍', rank: 'GEO' },
+  'agent-calendar': { primary: '#64748b', trim: '#1e293b', visor: '#bae6fd', badge: '⏱️', rank: 'SYNC' },
+  'agent-ayrianna': { primary: '#0ea5e9', trim: '#0f172a', visor: '#38bdf8', badge: '🛰️', rank: 'R&D' },
+  'agent-cron': { primary: '#d97706', trim: '#451a03', visor: '#fcd34d', badge: '🤖', rank: 'AUTO' },
+  'agent-tmux': { primary: '#475569', trim: '#0f172a', visor: '#94a3b8', badge: '🖥️', rank: 'MUX' },
+  'agent-connect': { primary: '#3b82f6', trim: '#172554', visor: '#bfdbfe', badge: '📡', rank: 'BUS' },
 }
 
 export function resolveOverheadStatusBadge(character: OfficeCharacter): {
@@ -127,6 +127,7 @@ export const CharacterActor: React.FC<CharacterActorProps> = ({
   const isWalking = character.targetWaypoints.length > 0
   const isAmnesia = character.context.pct >= 30 || character.status === 'AMNESIA'
   const badge = resolveOverheadStatusBadge(character)
+  const palette = ARCHETYPE_PALETTES[character.archetype] ?? ARCHETYPE_PALETTES['vessel-agy']
 
   const workstationSpot = COMMAND_OFFICE_ROOM.workstations.find(
     (w) => w.id === character.deskSpotId
@@ -153,13 +154,20 @@ export const CharacterActor: React.FC<CharacterActorProps> = ({
         position: 'absolute',
         left: `${character.position.x}%`,
         top: `${character.position.y}%`,
-        height: '9.2%',
+        height: '9.6%',
         transform: 'translate(-50%, -100%)',
         zIndex,
         cursor: 'pointer',
       }}
       onClick={() => onSelect?.(character)}
     >
+      {/* Selected Unit Overhead Target Chevron */}
+      {isSelected && (
+        <div className="character-target-chevron" aria-hidden="true">
+          ▼
+        </div>
+      )}
+
       {/* Compact Overhead Status Pill */}
       <div
         className={`character-overhead-badge tone-${badge.tone}`}
@@ -180,13 +188,19 @@ export const CharacterActor: React.FC<CharacterActorProps> = ({
         </div>
       )}
 
-      {/* Character Sprite (height: 86px / 11.2% of stage height, bottom-center anchored) */}
+      {/* Isometric Ground Target Pedestal Ring */}
+      <div
+        className={`character-ground-ring tone-${badge.tone}${isSelected ? ' is-locked' : ''}`}
+        aria-hidden="true"
+      />
+
+      {/* Character Sprite */}
       <div className={`character-sprite-frame${isWalking ? ' walk-bob' : ''}`}>
         {fallbackTier < 2 ? (
           <img
             src={activeImgSrc}
             alt={`${character.displayName} (${character.facing})`}
-            height={70}
+            height={72}
             style={{
               height: '100%',
               width: 'auto',
@@ -205,9 +219,12 @@ export const CharacterActor: React.FC<CharacterActorProps> = ({
         )}
       </div>
 
-      {/* Compact Footplate with Vessel Chip + 30%-Rule Context Meter */}
+      {/* Gamified RPG/RTS Unit Footplate with Rank Badge + Vessel Chip + Context Stability Bar */}
       <div className="character-footplate">
         <div className="character-name-row">
+          <span className="unit-rank-icon" aria-hidden="true">
+            {palette.badge}
+          </span>
           <span className={`vessel-chip vessel-${character.vessel.toLowerCase()}`}>
             {character.vessel}
           </span>
@@ -215,11 +232,11 @@ export const CharacterActor: React.FC<CharacterActorProps> = ({
         </div>
         <div
           className="context-bar-track"
-          title={`30%-Rule Context Gauge: ${character.context.pct}%`}
+          title={`30%-Rule Context Stability: ${character.context.pct}%`}
         >
           <div
             className={`context-bar-fill severity-${character.context.severity}`}
-            style={{ width: `${Math.min(100, Math.max(4, character.context.pct))}%` }}
+            style={{ width: `${Math.min(100, Math.max(6, character.context.pct))}%` }}
           />
         </div>
       </div>

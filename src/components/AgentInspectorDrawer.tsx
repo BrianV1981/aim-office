@@ -336,6 +336,32 @@ export const AgentInspectorDrawer: React.FC<AgentInspectorDrawerProps> = ({
 
       {/* Scrollable Wide Cockpit Body */}
       <div className="drawer-scrollable-body">
+        {/* Gamified Unit Tactical Stat Strip */}
+        <div className="dossier-stat-strip" data-testid="dossier-stat-strip">
+          <div className="dossier-stat-cell">
+            <span className="dossier-stat-label">UNIT STATE</span>
+            <strong className={`dossier-stat-val status-${character.status.toLowerCase()}`}>
+              {character.status}
+            </strong>
+          </div>
+          <div className="dossier-stat-cell">
+            <span className="dossier-stat-label">RECALL HEALTH</span>
+            <strong className={`dossier-stat-val severity-${character.context.severity}`}>
+              {Math.max(0, 100 - character.context.pct)}% OPTIMAL
+            </strong>
+          </div>
+          <div className="dossier-stat-cell">
+            <span className="dossier-stat-label">TOOL OPS</span>
+            <strong className="dossier-stat-val">
+              {forensics ? `${forensics.toolCallCount} EXEC` : 'SYNCING'}
+            </strong>
+          </div>
+          <div className="dossier-stat-cell">
+            <span className="dossier-stat-label">STATION</span>
+            <strong className="dossier-stat-val">{character.deskSpotId.toUpperCase()}</strong>
+          </div>
+        </div>
+
         {/* 30%-Rule Context Window Gauge */}
         <section className="drawer-section">
           <div className="section-label-row">

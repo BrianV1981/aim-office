@@ -41,10 +41,14 @@ export const TopCommandBar: React.FC<TopCommandBarProps> = ({
     let green = 0
     let amber = 0
     let red = 0
+    let activeWorking = 0
     let avgPct = 0
 
     for (const c of characters) {
       avgPct += c.context.pct
+      if (c.status === 'THINKING' || c.status === 'TOOL_EXEC' || c.status === 'COURIER') {
+        activeWorking++
+      }
       if (c.context.pct >= 30 || c.status === 'AMNESIA') {
         red++
       } else if (c.context.pct >= 20) {
@@ -54,77 +58,94 @@ export const TopCommandBar: React.FC<TopCommandBarProps> = ({
       }
     }
 
-    const mean = characters.length > 0 ? Math.round((avgPct / characters.length) * 10) / 10 : 0
-    return { green, amber, red, mean }
+    const total = characters.length
+    const mean = total > 0 ? Math.round((avgPct / total) * 10) / 10 : 0
+    const readinessPct =
+      total > 0 ? Math.max(0, Math.min(100, Math.round(((total - red * 0.8 - amber * 0.25) / total) * 100))) : 100
+    const fleetLevel = Math.max(1, total)
+
+    return { green, amber, red, activeWorking, mean, readinessPct, fleetLevel }
   }, [characters])
 
-  const connectionLabel = demoMode
-    ? 'DEMO SIMULATION'
-    : isFallbackActive
-      ? 'DEMO FALLBACK (AIM-Connect Offline)'
-      : 'LIVE AIM-CONNECT (:8000)'
+  const isLive = !demoMode && !isFallbackActive
+  const connectionLabel = isLive ? 'LIVE TELEMETRY :8000' : 'AUTONOMOUS OPS SIM'
 
   return (
-    <header className="top-command-bar" data-testid="top-command-bar">
-      <div className="command-brand-block">
-        <div className="command-title-row">
-          <span className="command-emblem" aria-hidden="true">
-            🏢
-          </span>
-          <h1 className="command-title">{title}</h1>
-          <span
-            className={`connection-pill ${
-              !demoMode && !isFallbackActive ? 'is-live' : 'is-demo'
-            }`}
-            data-testid="connection-status-pill"
-          >
-            {connectionLabel}
-          </span>
-        </div>
-        <p className="command-subtitle">{subtitle}</p>
-      </div>
-
-      {/* Fleet-Wide 30%-Rule Context Health Summary */}
-      <div className="command-telemetry-summary" data-testid="fleet-context-summary">
-        <div className="telemetry-stat">
-          <span className="stat-label">Active Vessels</span>
-          <strong className="stat-value" data-testid="active-agent-count">
-            {characters.length}
-          </strong>
-        </div>
-        <div className="telemetry-stat">
-          <span className="stat-label">30%-Rule Fleet Health</span>
-          <div className="health-badges-row">
-            <span className="health-chip chip-green" title="Healthy (<20% context)">
-              🟢 {healthSummary.green}
-            </span>
-            <span className="health-chip chip-amber" title="Warning (20-29% context)">
-              🟡 {healthSummary.amber}
-            </span>
-            <span className="health-chip chip-red" title="Amnesia Risk (>=30% context)">
-              🔥 {healthSummary.red}
-            </span>
-            <span className="health-mean">Avg {healthSummary.mean}%</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Interactive Command Controls */}
-      <div className="command-actions-group">
+    <header className="top-command-bar is-tactical-hud" data-testid="top-command-bar">
+      {/* Left Pod: Sector Identity + Squad Roster Trigger */}
+      <div className="hud-pod hud-pod-brand">
         {onToggleStaffRoster && (
           <button
             type="button"
             className={`hud-btn btn-staff-roster${isStaffRosterOpen ? ' is-active' : ''}`}
             data-testid="btn-toggle-staff-roster"
             onClick={onToggleStaffRoster}
-            title="Toggle Office Staff & Agent Fleet Roster Column"
+            title="Toggle Tactical Squad & Personnel Roster"
           >
-            👥 Staff Roster ({characters.length})
+            <span className="btn-roster-dot" />
+            👥 SQUAD ({characters.length})
           </button>
         )}
+
+        <div className="command-brand-block">
+          <div className="command-title-row">
+            <span className="command-emblem" aria-hidden="true">
+              ❖
+            </span>
+            <h1 className="command-title">{title}</h1>
+            <span
+              className={`connection-pill ${isLive ? 'is-live' : 'is-demo'}`}
+              data-testid="connection-status-pill"
+            >
+              {connectionLabel}
+            </span>
+          </div>
+          <p className="command-subtitle">{subtitle}</p>
+        </div>
+      </div>
+
+      {/* Center Pod: Gamified Squad Readiness XP & 30%-Rule Neural Reactor */}
+      <div className="hud-pod command-telemetry-summary" data-testid="fleet-context-summary">
+        <div className="telemetry-stat stat-readiness" data-testid="fleet-readiness-score">
+          <span className="stat-label">SQUAD RANK</span>
+          <strong className="stat-value rank-gold">
+            LVL {healthSummary.fleetLevel} · {healthSummary.readinessPct}%
+          </strong>
+        </div>
+
+        <div className="telemetry-divider" />
+
+        <div className="telemetry-stat">
+          <span className="stat-label">UNITS</span>
+          <strong className="stat-value" data-testid="active-agent-count">
+            {characters.length}
+          </strong>
+        </div>
+
+        <div className="telemetry-divider" />
+
+        <div className="telemetry-stat">
+          <span className="stat-label">30%-RULE NEURAL REACTOR</span>
+          <div className="health-badges-row">
+            <span className="health-chip chip-green" title="Optimal Recall (<20% context)">
+              🟢 {healthSummary.green}
+            </span>
+            <span className="health-chip chip-amber" title="Elevated Load (20-29% context)">
+              🟡 {healthSummary.amber}
+            </span>
+            <span className="health-chip chip-red" title="Amnesia Hazard (>=30% context)">
+              🔥 {healthSummary.red}
+            </span>
+            <span className="health-mean">AVG {healthSummary.mean}%</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Right Pod: Tactical Sector & Operations Controls */}
+      <div className="hud-pod command-actions-group">
         {onSelectTheme && (
-          <label className="theme-switcher-label" title="Switch Standardized Room Theme Pack">
-            <span className="sr-only-label">Theme:</span>
+          <label className="theme-switcher-label" title="Switch Tactical Sector Map">
+            <span className="sr-only-label">Sector:</span>
             <select
               className="hud-select-theme"
               data-testid="select-theme-pack"
@@ -145,33 +166,36 @@ export const TopCommandBar: React.FC<TopCommandBarProps> = ({
           className="hud-btn btn-kanban"
           data-testid="btn-open-whiteboard"
           onClick={onOpenWhiteboard}
-          title={boardLabel ? `Open ${boardLabel} Kanban Whiteboard` : 'Open Kanban Whiteboard'}
+          title={boardLabel ? `Open ${boardLabel} Tactical Kanban Board` : 'Open Tactical Kanban Board'}
         >
-          📋 Kanban{boardLabel ? ` · ${boardLabel}` : ' Whiteboard'}
+          📋 OPS BOARD{boardLabel ? ` · ${boardLabel}` : ''}
         </button>
         <button
           type="button"
           className="hud-btn btn-courier"
           data-testid="btn-trigger-courier"
           onClick={onTriggerCourierDemo}
+          title="Dispatch Courier Relay to J.O.S.H.U.A. Command"
         >
-          📨 Trigger Courier Demo
+          📡 RELAY DISPATCH
         </button>
         <button
           type="button"
           className="hud-btn btn-mode"
           data-testid="btn-toggle-demo-mode"
           onClick={onToggleDemoMode}
+          title="Switch between Live AIM-Connect Daemon and Autonomous Simulation"
         >
-          {demoMode ? '🔌 Switch to Live' : '🧪 Demo Mode'}
+          {demoMode ? '🔌 GO LIVE' : '⚡ SIM FEED'}
         </button>
         <button
           type="button"
           className="hud-btn btn-lighting"
           data-testid="btn-toggle-lighting"
           onClick={onToggleLighting}
+          title="Toggle Day / NVG Night Optics"
         >
-          {lightingMode === 'day' ? '☀️ Day Mode' : '🌙 Night Mode'}
+          {lightingMode === 'day' ? '☀️ DAY' : '🌙 NVG'}
         </button>
       </div>
     </header>

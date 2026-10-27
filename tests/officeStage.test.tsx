@@ -229,6 +229,13 @@ describe('AIM-Office Isometric 2.5D Engine, Elastic 4-Way Quad Pods, Pan/Zoom & 
     )
     fireEvent.click(joshuaActor)
     expect(onSelectChar).toHaveBeenCalledWith(sampleChars[0])
+
+    // Verify Bottom Tactical Dock, Live Telemetry Ticker & RTS Squad Quick-Select Hotbar (#13)
+    expect(screen.getByTestId('tactical-bottom-dock')).toBeInTheDocument()
+    expect(screen.getByTestId('live-telemetry-ticker')).toHaveTextContent('aim-opencode')
+    expect(screen.getByTestId('squad-quick-hotbar')).toBeInTheDocument()
+    fireEvent.click(screen.getByTestId('hotbar-slot-aim-grok'))
+    expect(onSelectChar).toHaveBeenCalledWith(sampleChars[1])
   })
 
   it('omits WallTaskBoard in Sovereign War Room (wallBoardRect: null) while rendering skewDeg 0 in Cutaway Agency and skewDeg 25.6 in Classic Studio (#9)', () => {
