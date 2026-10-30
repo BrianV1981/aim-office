@@ -1,9 +1,13 @@
 {
   "name": "aim-office",
-  "version": "0.1.0",
-  "private": true,
+  "version": "1.0.0",
+  "private": false,
   "description": "Sovereign Isometric 2.5D Pixel-Art Agent Command Center for the A.I.M. / J.O.S.H.U.A. Ecosystem",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/BrianV1981/aim-office.git"
+  },
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1 --port 5175",

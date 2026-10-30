@@ -25,14 +25,14 @@ describe('AIM-Connect Fleet Telemetry Bridge & Office Director (#2 & #5)', () =>
     expect(resolveSovereignArchetype('aim-auditor', 'Auditor')).toBe('vessel-auditor')
     expect(resolveSovereignArchetype('grok-audit', 'Grok')).toBe('vessel-auditor')
     expect(resolveSovereignArchetype('aim-office', 'AGY')).toBe('vessel-agy')
-    expect(resolveSovereignArchetype('aim-ld', 'Grok')).toBe('vessel-grok')
-    expect(resolveSovereignArchetype('aim-tbsoftwash', 'OpenCode')).toBe('vessel-opencode')
+    expect(resolveSovereignArchetype('aim-scout', 'Grok')).toBe('vessel-grok')
+    expect(resolveSovereignArchetype('aim-ops', 'OpenCode')).toBe('vessel-opencode')
     expect(resolveSovereignArchetype('aim-codex', 'Codex')).toBe('vessel-codex')
 
     const used = new Set<any>()
-    expect(resolveRosterCharacterArchetype('aim-ld', 'Grok', used)).toBe('agent-leaddeeds')
-    expect(resolveRosterCharacterArchetype('aim-tbsoftwash', 'OpenCode', used)).toBe(
-      'agent-tbsoftwash'
+    expect(resolveRosterCharacterArchetype('aim-scout', 'Grok', used)).toBe('agent-data-scout')
+    expect(resolveRosterCharacterArchetype('aim-ops', 'OpenCode', used)).toBe(
+      'agent-field-ops'
     )
     expect(resolveRosterCharacterArchetype('aim-connect', 'AGY', used)).toBe('agent-connect')
 
@@ -50,7 +50,7 @@ describe('AIM-Connect Fleet Telemetry Bridge & Office Director (#2 & #5)', () =>
           status: 'THINKING',
           context_pct: 14.2,
           branch: 'main',
-          path: '/home/kingb/aim-joshua',
+          path: '/tmp/aim-joshua',
           preview: 'Orchestrating swarm',
         },
         {
@@ -59,7 +59,7 @@ describe('AIM-Connect Fleet Telemetry Bridge & Office Director (#2 & #5)', () =>
           status: 'THINKING',
           context_pct: 32.5,
           branch: 'feat/swarm',
-          path: '/home/kingb/aim-grok',
+          path: '/tmp/aim-grok',
           preview: 'Approaching amnesia limit',
         },
       ],
@@ -144,7 +144,7 @@ describe('AIM-Connect Fleet Telemetry Bridge & Office Director (#2 & #5)', () =>
     const parsedIdle = parsePaneScrollbackTelemetry(
       idleCompletedToolScrollback,
       'agy.real',
-      'aim-ld-content'
+      'aim-content'
     )
     expect(parsedIdle.status).toBe('IDLE')
 
@@ -184,7 +184,7 @@ describe('AIM-Connect Fleet Telemetry Bridge & Office Director (#2 & #5)', () =>
             session_name: 'agent-op_9f3c7e-opencode',
             vessel: 'agy',
             status: 'IDLE',
-            path: '/home/kingb/aim-connect/backend',
+            path: '/tmp/aim-connect/backend',
             repo_name: 'backend',
             branch: 'master',
             tokens_used: 18_000,
@@ -195,7 +195,7 @@ describe('AIM-Connect Fleet Telemetry Bridge & Office Director (#2 & #5)', () =>
             session_name: 'aim-office',
             vessel: 'agy',
             status: 'IDLE',
-            path: '/home/kingb/aim-office',
+            path: '/tmp/aim-office',
             repo_name: 'aim-office',
             branch: 'main',
             tokens_used: 95_000,
@@ -203,11 +203,11 @@ describe('AIM-Connect Fleet Telemetry Bridge & Office Director (#2 & #5)', () =>
             context_pct: 9.5,
           },
           {
-            session_name: 'aim-ld',
+            session_name: 'aim-scout',
             vessel: 'agy',
             status: 'THINKING',
-            path: '/home/kingb/aim-ld',
-            repo_name: 'aim-ld',
+            path: '/tmp/aim-scout',
+            repo_name: 'aim-scout',
             branch: 'main',
             tokens_used: 340_000,
             tokens_limit: 1_000_000,
@@ -221,7 +221,7 @@ describe('AIM-Connect Fleet Telemetry Bridge & Office Director (#2 & #5)', () =>
     expect(fleet).toHaveLength(2)
     expect(fleet[0].session_name).toBe('aim-office')
     expect(fleet[0].project_number).toBe(14)
-    expect(fleet[1].session_name).toBe('aim-ld')
+    expect(fleet[1].session_name).toBe('aim-scout')
     expect(fleet[1].status).toBe('AMNESIA')
     expect(fleet[1].project_number).toBe(5)
 

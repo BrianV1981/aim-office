@@ -1,8 +1,11 @@
 import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { Plugin } from 'vite'
+
+const USER_HOME_DIR = os.homedir()
 
 export interface LocalFleetSessionRecord {
   session_name: string
@@ -55,6 +58,23 @@ export function resolveMainRepoRoot(cwdPath: string): string {
   return cwdPath
 }
 
+function loadCustomProjectMapFromEnv(): Record<string, number> {
+  const raw = process.env.AIM_PROJECT_MAP_JSON
+  if (!raw) return {}
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>
+    const clean: Record<string, number> = {}
+    for (const [k, v] of Object.entries(parsed)) {
+      if (typeof v === 'number' && v > 0) {
+        clean[k.trim().toLowerCase()] = v
+      }
+    }
+    return clean
+  } catch {
+    return {}
+  }
+}
+
 export const SESSION_PROJECT_MAP: Record<string, number> = {
   'aim-office': 14,
   'aim-agy': 11,
@@ -67,22 +87,23 @@ export const SESSION_PROJECT_MAP: Record<string, number> = {
   'aim-connect': 6,
   'aim-connect-workspace': 6,
   backend: 6,
-  'aim-ld': 5,
-  'aim-ld-content': 5,
-  'aim-ayrianna': 4,
+  'aim-scout': 5,
+  'aim-content': 5,
+  'aim-recon': 4,
   'aim-claude': 3,
   'aim-browser': 2,
-  'aim-tbsoftwash': 15,
-  'aim-tbsoftwash-content': 15,
-  'tbsoftwash-ai-book': 16,
-  'aim-skorbane': 17,
-  'aim-skorbane-content': 17,
+  'aim-ops': 15,
+  'aim-media': 15,
+  'aim-ai-book': 16,
+  'aim-lore': 17,
+  'aim-design': 17,
   'aim-gbp': 18,
   'aim-calendar': 19,
   'aim-cron-dashboard': 20,
   'aim-cron': 20,
   'aim-youtube': 21,
   'aim-auditor': 22,
+  ...loadCustomProjectMapFromEnv(),
 }
 
 const kanbanSessionCache = new Map<
@@ -233,10 +254,10 @@ const BRAIN_TOKEN_CACHE_TTL_MS = 3_000
 const REPO_TO_SESSION_ALIASES: Record<string, string[]> = {
   'aim-tmux-dashboard': ['aim-dash', 'aim-tmux', 'aim-tmux-dashboard'],
   'aim-cron-dashboard': ['aim-cron', 'aim-cron-dashboard'],
-  'tbsoftwash-ai-book': ['aim-ai-book', 'tbsoftwash-ai-book'],
-  'aim-tbsoftwash-content': ['aim-tb-content', 'aim-tbsoftwash-content'],
-  'aim-skorbane-content': ['aim-skorbane-media', 'aim-skorbane-content'],
-  'aim-ld-content': ['aim-ld-content'],
+  'aim-ai-book': ['aim-ai-book'],
+  'aim-media': ['aim-media'],
+  'aim-design': ['aim-design'],
+  'aim-content': ['aim-content'],
   'aim-auditor': ['aim-auditor', 'grok-audit'],
 }
 
@@ -254,7 +275,8 @@ export function resolveAgyBrainContextMap(): {
 
   const pyScript = `
 import sqlite3, json, os, re
-db = "/home/kingb/.gemini/antigravity-cli/conversation_summaries.db"
+agy_root = os.path.expanduser("~/.gemini/antigravity-cli")
+db = os.path.join(agy_root, "conversation_summaries.db")
 if not os.path.isfile(db):
     print("{}")
     raise SystemExit(0)
@@ -277,7 +299,7 @@ for cid, ws_raw in rows:
         p = re.sub(r"/workspace/issue-[^/]+.*$", "", u.replace("file://", "").rstrip("/"))
         if not p or p in out:
             continue
-        tpath = f"/home/kingb/.gemini/antigravity-cli/brain/{cid}/.system_generated/logs/transcript.jsonl"
+        tpath = os.path.join(agy_root, "brain", cid, ".system_generated", "logs", "transcript.jsonl")
         if not os.path.isfile(tpath):
             continue
         try:
@@ -672,13 +694,13 @@ export function resolveSessionPath(sessionName: string): string {
     if (out && fs.existsSync(out)) return out
   }
   const candidates = [
-    path.join('/home/kingb', sessionName),
-    path.join('/home/kingb/aim-agents', sessionName),
+    path.join(USER_HOME_DIR, sessionName),
+    path.join(USER_HOME_DIR, 'aim-agents', sessionName),
   ]
   for (const c of candidates) {
     if (fs.existsSync(c)) return c
   }
-  return '/home/kingb/aim-office'
+  return process.cwd()
 }
 
 function cleanMarkdownText(raw: string): string {

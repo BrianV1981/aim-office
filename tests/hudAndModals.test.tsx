@@ -31,7 +31,7 @@ describe('AIM-Office HUD Command Bar, Forensic Inspector Drawer & Kanban Modal (
 
     render(
       <TopCommandBar
-        title="A.I.M. / LeadDeeds Sovereign Command Center"
+        title="A.I.M. Sovereign Command Center"
         subtitle="J.O.S.H.U.A. Multi-Vessel Isometric Fleet Floor"
         characters={sampleCharacters}
         lightingMode="day"
@@ -121,19 +121,19 @@ describe('AIM-Office HUD Command Bar, Forensic Inspector Drawer & Kanban Modal (
     expect(onDispatchCourierFromAgent).toHaveBeenCalledWith(officeChar)
   })
 
-  it('switches Kanban board per project (e.g. aim-ld -> Project #5, aim-joshua -> Project #7) and updates WallTaskBoard & WhiteboardModal (#10)', async () => {
-    expect(resolveMappedProjectNumber('aim-office', '/home/kingb/aim-office', null)).toBe(14)
-    expect(resolveMappedProjectNumber('aim-joshua', '/home/kingb/aim-joshua', null)).toBe(7)
-    expect(resolveMappedProjectNumber('aim-connect', '/home/kingb/aim-connect', null)).toBe(6)
-    expect(resolveMappedProjectNumber('aim-ld', '/home/kingb/aim-ld', null)).toBe(5)
-    expect(resolveMappedProjectNumber('aim-tbsoftwash', '/home/kingb/aim-tbsoftwash', null)).toBe(15)
-    expect(resolveMappedProjectNumber('aim-skorbane', '/home/kingb/aim-skorbane', null)).toBe(17)
+  it('switches Kanban board per project (e.g. aim-scout -> Project #5, aim-joshua -> Project #7) and updates WallTaskBoard & WhiteboardModal (#10)', async () => {
+    expect(resolveMappedProjectNumber('aim-office', '/tmp/aim-office', null)).toBe(14)
+    expect(resolveMappedProjectNumber('aim-joshua', '/tmp/aim-joshua', null)).toBe(7)
+    expect(resolveMappedProjectNumber('aim-connect', '/tmp/aim-connect', null)).toBe(6)
+    expect(resolveMappedProjectNumber('aim-scout', '/tmp/aim-scout', null)).toBe(5)
+    expect(resolveMappedProjectNumber('aim-ops', '/tmp/aim-ops', null)).toBe(15)
+    expect(resolveMappedProjectNumber('aim-lore', '/tmp/aim-lore', null)).toBe(17)
 
-    const ldKanban = await defaultAimConnectClient.fetchSessionKanban('aim-ld', true)
+    const scoutKanban = await defaultAimConnectClient.fetchSessionKanban('aim-scout', true)
     const joshuaKanban = await defaultAimConnectClient.fetchSessionKanban('aim-joshua', true)
-    expect(ldKanban.projectNumber).toBe(5)
+    expect(scoutKanban.projectNumber).toBe(5)
     expect(joshuaKanban.projectNumber).toBe(7)
-    expect(ldKanban.tickets[0].number).not.toBe(joshuaKanban.tickets[0].number)
+    expect(scoutKanban.tickets[0].number).not.toBe(joshuaKanban.tickets[0].number)
 
     const onClose = vi.fn()
     const onReplay = vi.fn()
@@ -141,13 +141,13 @@ describe('AIM-Office HUD Command Bar, Forensic Inspector Drawer & Kanban Modal (
     const { rerender } = render(
       <>
         <WallTaskBoard
-          boardLabel={`PROJECT #${ldKanban.projectNumber} (${ldKanban.session})`}
-          tickets={ldKanban.tickets}
+          boardLabel={`PROJECT #${scoutKanban.projectNumber} (${scoutKanban.session})`}
+          tickets={scoutKanban.tickets}
         />
         <WhiteboardModal
           isOpen={true}
-          boardLabel={`PROJECT #${ldKanban.projectNumber} (${ldKanban.session})`}
-          tickets={ldKanban.tickets}
+          boardLabel={`PROJECT #${scoutKanban.projectNumber} (${scoutKanban.session})`}
+          tickets={scoutKanban.tickets}
           swarmDispatches={DEMO_SWARM_DISPATCHES}
           onClose={onClose}
           onReplayDispatchWalk={onReplay}
@@ -155,9 +155,9 @@ describe('AIM-Office HUD Command Bar, Forensic Inspector Drawer & Kanban Modal (
       </>
     )
 
-    expect(screen.getByTestId('wall-task-board-header')).toHaveTextContent('PROJECT #5 (aim-ld)')
+    expect(screen.getByTestId('wall-task-board-header')).toHaveTextContent('PROJECT #5 (aim-scout)')
     expect(screen.getByTestId('whiteboard-modal')).toBeInTheDocument()
-    expect(screen.getByTestId('whiteboard-modal-title')).toHaveTextContent('PROJECT #5 (aim-ld)')
+    expect(screen.getByTestId('whiteboard-modal-title')).toHaveTextContent('PROJECT #5 (aim-scout)')
     expect(screen.getByTestId('kanban-col-done')).toHaveTextContent('#51')
     expect(screen.getByTestId('kanban-col-in-progress')).toHaveTextContent('#52')
     expect(screen.getByTestId('kanban-col-todo')).toHaveTextContent('#53')
@@ -229,19 +229,19 @@ describe('AIM-Office HUD Command Bar, Forensic Inspector Drawer & Kanban Modal (
     expect(screen.getByTestId('agent-staff-roster').style.zIndex).toBe('3000')
     expect(screen.getByTestId('staff-roster-count')).toHaveTextContent('20 Agents')
     expect(screen.getByTestId('staff-row-aim-joshua')).toBeInTheDocument()
-    expect(screen.getByTestId('staff-row-aim-ld')).toBeInTheDocument()
-    expect(screen.getByTestId('staff-row-aim-tbsoftwash')).toBeInTheDocument()
+    expect(screen.getByTestId('staff-row-aim-scout')).toBeInTheDocument()
+    expect(screen.getByTestId('staff-row-aim-ops')).toBeInTheDocument()
 
     // Click an agent row -> selects character
-    fireEvent.click(screen.getByTestId('staff-row-aim-ld'))
+    fireEvent.click(screen.getByTestId('staff-row-aim-scout'))
     expect(onSelectCharacter).toHaveBeenCalledWith(
-      expect.objectContaining({ sessionName: 'aim-ld' })
+      expect.objectContaining({ sessionName: 'aim-scout' })
     )
 
     // Filter by search query
     const searchInput = screen.getByTestId('input-staff-search') as HTMLInputElement
-    fireEvent.change(searchInput, { target: { value: 'tbsoftwash' } })
-    expect(screen.getByTestId('staff-row-aim-tbsoftwash')).toBeInTheDocument()
+    fireEvent.change(searchInput, { target: { value: 'aim-ops' } })
+    expect(screen.getByTestId('staff-row-aim-ops')).toBeInTheDocument()
     expect(screen.queryByTestId('staff-row-aim-joshua')).toBeNull()
 
     // Clear search and filter by Amnesia status pill

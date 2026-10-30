@@ -315,7 +315,7 @@ export const AgentInspectorDrawer: React.FC<AgentInspectorDrawerProps> = ({
                 <code>
                   {workspaceCtx?.panePath ||
                     character.worktreePath ||
-                    `/home/kingb/${character.sessionName}`}
+                    `~/${character.sessionName}`}
                 </code>
               </div>
               {workspaceCtx?.worktrees && workspaceCtx.worktrees.length > 0 && (

@@ -572,7 +572,7 @@ function createRoomFromPodCenters(config: {
 
 export const COMMAND_OFFICE_ROOM: IsometricRoom = createRoomFromPodCenters({
   id: 'aim-command-office',
-  name: 'A.I.M. / LeadDeeds Sovereign Command Center',
+  name: 'A.I.M. Sovereign Command Center',
   subtitle: 'J.O.S.H.U.A. Multi-Vessel Isometric Fleet Floor',
   dayBg: '/rooms/office-day.png',
   nightBg: '/rooms/office-night.png',
@@ -750,7 +750,7 @@ export const CUTAWAY_AGENCY_POD_CENTERS: ReadonlyArray<PodCenterSpec> = [
   },
   {
     podIndex: 2,
-    name: 'Project Bay A — West Sunlit Rug (LeadDeeds & Content)',
+    name: 'Project Bay A — West Sunlit Rug (Data Scout & Content)',
     cx: 26.5,
     cy: 55.0,
     aisleWaypointId: 'wp-aisle-1',
@@ -758,7 +758,7 @@ export const CUTAWAY_AGENCY_POD_CENTERS: ReadonlyArray<PodCenterSpec> = [
   },
   {
     podIndex: 3,
-    name: 'Project Bay B — East Strategy Rug (TBSoftwash & AI Book)',
+    name: 'Project Bay B — East Strategy Rug (Field Ops & AI Book)',
     cx: 75.5,
     cy: 59.5,
     aisleWaypointId: 'wp-aisle-2',
@@ -766,7 +766,7 @@ export const CUTAWAY_AGENCY_POD_CENTERS: ReadonlyArray<PodCenterSpec> = [
   },
   {
     podIndex: 4,
-    name: 'Project Bay C — South-East Lounge Rug (Skorbane & Media)',
+    name: 'Project Bay C — South-East Lounge Rug (Lore & Visual Media)',
     cx: 70.0,
     cy: 83.5,
     aisleWaypointId: 'wp-aisle-4',

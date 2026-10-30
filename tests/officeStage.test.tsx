@@ -408,11 +408,11 @@ describe('AIM-Office Isometric 2.5D Engine, Elastic 4-Way Quad Pods, Pan/Zoom & 
       },
       {
         id: 'c-idle-1',
-        sessionName: 'aim-ld',
-        displayName: 'aim-ld',
-        roleTitle: 'LeadDeeds',
+        sessionName: 'aim-scout',
+        displayName: 'aim-scout',
+        roleTitle: 'Data Scout',
         vessel: 'AGY',
-        archetype: 'agent-leaddeeds',
+        archetype: 'agent-data-scout',
         status: 'IDLE',
         context: { pct: 8, severity: 'green' },
         deskSpotId: 'spot-2',
@@ -423,11 +423,11 @@ describe('AIM-Office Isometric 2.5D Engine, Elastic 4-Way Quad Pods, Pan/Zoom & 
       },
       {
         id: 'c-idle-2',
-        sessionName: 'aim-tbsoftwash',
-        displayName: 'aim-tbsoftwash',
-        roleTitle: 'TBSoftwash',
+        sessionName: 'aim-ops',
+        displayName: 'aim-ops',
+        roleTitle: 'Field Ops',
         vessel: 'AGY',
-        archetype: 'agent-tbsoftwash',
+        archetype: 'agent-field-ops',
         status: 'IDLE',
         context: { pct: 7, severity: 'green' },
         deskSpotId: 'spot-3',
@@ -451,9 +451,9 @@ describe('AIM-Office Isometric 2.5D Engine, Elastic 4-Way Quad Pods, Pan/Zoom & 
     expect(withHangouts[1].idleEmote).toBeDefined()
     expect(withHangouts[2].hangoutSpotId).toBeDefined()
 
-    // When aim-ld transitions to TOOL_EXEC, it immediately returns to its assigned desk (spot-2)
+    // When aim-scout transitions to TOOL_EXEC, it immediately returns to its assigned desk (spot-2)
     const activeChars = testChars.map((c) =>
-      c.sessionName === 'aim-ld' ? { ...c, status: 'TOOL_EXEC' as const } : c
+      c.sessionName === 'aim-scout' ? { ...c, status: 'TOOL_EXEC' as const } : c
     )
     const afterWake = assignIdleHangoutsToCharacters(
       activeChars,
@@ -483,11 +483,11 @@ describe('AIM-Office Isometric 2.5D Engine, Elastic 4-Way Quad Pods, Pan/Zoom & 
     const emoteChars: OfficeCharacter[] = [
       {
         id: 'c-smoker',
-        sessionName: 'aim-ld',
-        displayName: 'aim-ld',
-        roleTitle: 'LeadDeeds',
+        sessionName: 'aim-scout',
+        displayName: 'aim-scout',
+        roleTitle: 'Data Scout',
         vessel: 'AGY',
-        archetype: 'agent-leaddeeds',
+        archetype: 'agent-data-scout',
         status: 'IDLE',
         context: { pct: 6, severity: 'green' },
         deskSpotId: 'spot-2',
@@ -517,11 +517,11 @@ describe('AIM-Office Isometric 2.5D Engine, Elastic 4-Way Quad Pods, Pan/Zoom & 
       },
       {
         id: 'c-seated',
-        sessionName: 'aim-tbsoftwash',
-        displayName: 'aim-tbsoftwash',
-        roleTitle: 'TBSoftwash',
+        sessionName: 'aim-ops',
+        displayName: 'aim-ops',
+        roleTitle: 'Field Ops',
         vessel: 'AGY',
-        archetype: 'agent-tbsoftwash',
+        archetype: 'agent-field-ops',
         status: 'IDLE',
         context: { pct: 5, severity: 'green' },
         deskSpotId: 'spot-4',
@@ -537,15 +537,15 @@ describe('AIM-Office Isometric 2.5D Engine, Elastic 4-Way Quad Pods, Pan/Zoom & 
     render(<OfficeStage room={retroPack.room} characters={emoteChars} />)
 
     expect(screen.getByTestId('office-atmosphere-fx')).toBeInTheDocument()
-    expect(screen.getByTestId('emote-prop-aim-ld')).toHaveAttribute('data-emote', 'smoke')
-    expect(screen.getByTestId('badge-aim-ld')).toHaveTextContent('🚬')
+    expect(screen.getByTestId('emote-prop-aim-scout')).toHaveAttribute('data-emote', 'smoke')
+    expect(screen.getByTestId('badge-aim-scout')).toHaveTextContent('🚬')
 
     expect(screen.getByTestId('emote-prop-aim-connect')).toHaveAttribute('data-emote', 'vape')
     expect(screen.getByTestId('badge-aim-connect')).toHaveTextContent('💨')
 
-    const seatedActor = screen.getByTestId('character-aim-tbsoftwash')
+    const seatedActor = screen.getByTestId('character-aim-ops')
     expect(seatedActor).toHaveAttribute('data-seated', 'true')
-    expect(screen.getByTestId('badge-aim-tbsoftwash')).toHaveTextContent('🛋️')
-    expect(screen.getByTestId('badge-aim-tbsoftwash')).toHaveTextContent('Seated')
+    expect(screen.getByTestId('badge-aim-ops')).toHaveTextContent('🛋️')
+    expect(screen.getByTestId('badge-aim-ops')).toHaveTextContent('Seated')
   })
 })
