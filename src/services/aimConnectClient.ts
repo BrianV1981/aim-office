@@ -77,12 +77,6 @@ export interface SessionKanbanPayload {
   tickets: KanbanTicketItem[]
 }
 
-export interface SessionOutputPayload {
-  session: string
-  output: string
-  lines: string[]
-}
-
 export function computeContextSeverity(pct: number): ContextSeverity {
   if (pct >= 30) return 'red'
   if (pct >= 20) return 'amber'
@@ -553,94 +547,6 @@ export class AimConnectClient {
         },
       ],
     }
-  }
-
-  async fetchSessionOutput(
-    sessionName: string,
-    forceDemo = false
-  ): Promise<SessionOutputPayload> {
-    if (!forceDemo) {
-      try {
-        const resp = await fetch(
-          `/api/office/session/${encodeURIComponent(sessionName)}/output`,
-          { headers: buildHeaders(this.apiToken) }
-        )
-        if (resp.ok) {
-          const json = (await resp.json()) as Record<string, unknown>
-          return {
-            session: sessionName,
-            output: String(json.output ?? ''),
-            lines: Array.isArray(json.lines) ? (json.lines as string[]) : [],
-          }
-        }
-      } catch {
-        // Fall through to demo output
-      }
-    }
-
-    const demoRecord = DEMO_FLEET_PANES.find((p) => p.sessionName === sessionName)
-    const text = `[${sessionName}] (${demoRecord?.vessel ?? 'AGY'} · branch ${
-      demoRecord?.branch ?? 'main'
-    })\n${demoRecord?.preview ?? 'Active agent session standing by at prompt.'}`
-    return {
-      session: sessionName,
-      output: text,
-      lines: text.split('\n'),
-    }
-  }
-
-  async sendSessionReply(
-    sessionName: string,
-    message: string,
-    forceDemo = false
-  ): Promise<{ status: string; session: string; message: string }> {
-    const trimmed = message.trim()
-    if (!forceDemo) {
-      try {
-        const resp = await fetch(
-          `/api/office/session/${encodeURIComponent(sessionName)}/reply`,
-          {
-            method: 'POST',
-            headers: buildHeaders(this.apiToken),
-            body: JSON.stringify({ message: trimmed }),
-          }
-        )
-        if (resp.ok) {
-          return { status: 'sent', session: sessionName, message: trimmed }
-        }
-      } catch {
-        // Fall through to simulated reply
-      }
-    }
-    return { status: 'simulated', session: sessionName, message: trimmed }
-  }
-
-  async dispatchAimCommunicate(
-    fromSession: string,
-    toSession: string,
-    instruction: string,
-    forceDemo = false
-  ): Promise<{ status: string; prompt: string }> {
-    const prompt = `Please use your aim-communicate skill to send a message to tmux session ${toSession} (declare FROM: ${fromSession} and REPLY_TO: ${fromSession}) with this directive/question: ${instruction.trim()}`
-    if (!forceDemo) {
-      try {
-        const resp = await fetch('/api/office/communicate', {
-          method: 'POST',
-          headers: buildHeaders(this.apiToken),
-          body: JSON.stringify({ fromSession, toSession, instruction: instruction.trim() }),
-        })
-        if (resp.ok) {
-          const json = (await resp.json()) as Record<string, unknown>
-          return {
-            status: String(json.status ?? 'dispatched'),
-            prompt: String(json.prompt ?? prompt),
-          }
-        }
-      } catch {
-        // Fall through to simulated dispatch
-      }
-    }
-    return { status: 'simulated', prompt }
   }
 
   async fetchSessionForensics(

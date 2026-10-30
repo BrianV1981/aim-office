@@ -276,7 +276,6 @@ export const App: React.FC = () => {
 
         <AgentInspectorDrawer
           character={selectedCharacter}
-          allCharacters={themedCharacters}
           client={client}
           demoMode={demoMode || isFallbackActive}
           onClose={() => setSelectedSession(null)}
@@ -284,10 +283,9 @@ export const App: React.FC = () => {
             triggerCourierWalk({
               sender: char.sessionName,
               recipient: 'aim-joshua',
-              preview: `[REPORT from ${char.sessionName}] Status sync -> aim-joshua`,
+              preview: `[VISUAL PREVIEW] ${char.sessionName} -> aim-joshua`,
             })
           }
-          onDispatchAimCommunicate={(dispatch) => triggerCourierWalk(dispatch)}
         />
       </div>
 

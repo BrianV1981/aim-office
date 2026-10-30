@@ -31,18 +31,6 @@ export interface LocalKanbanTicket {
   assignee: string
 }
 
-export interface RecordedCommunicateDispatch {
-  id: string
-  filename: string
-  sender: string
-  recipient: string
-  reply_to: string
-  mtime: number
-  preview: string
-}
-
-const recentCommunicateDispatches: RecordedCommunicateDispatch[] = []
-
 const SAFE_SESSION_RE = /^[a-zA-Z0-9_.-]+$/
 
 function runCmd(cmd: string, args: string[], timeoutMs = 4500): string {
@@ -983,181 +971,102 @@ export function fetchProjectKanbanForSession(sessionName: string): {
   return result
 }
 
-export function captureCleanSessionOutput(sessionName: string): {
-  session: string
-  output: string
-  lines: string[]
-} {
-  if (!SAFE_SESSION_RE.test(sessionName)) {
-    return { session: sessionName, output: '', lines: [] }
-  }
-  const raw = runCmd(
-    'tmux',
-    ['capture-pane', '-t', sessionName, '-p', '-J', '-S', '-60'],
-    2000
-  )
-  const cleanedLines = raw
-    .split('\n')
-    .map((l) => l.replace(/\s+$/, ''))
-    .filter(
-      (l) =>
-        l.trim().length > 0 &&
-        !/^[─━═]+$/.test(l.trim()) &&
-        !l.includes('? for shortcuts') &&
-        !l.includes('esc to cancel')
-    )
-  const tail = cleanedLines.slice(-18)
-  return {
-    session: sessionName,
-    output: tail.join('\n') || `[${sessionName}] Active tmux session ready at prompt.`,
-    lines: tail,
-  }
-}
+const LOOPBACK_ORIGIN_RE = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i
 
 /**
- * Inject text into a target tmux session using the 3-step tmux clipboard buffer protocol:
- *   1. `tmux set-buffer -- <text>`
- *   2. `tmux paste-buffer -t <session>`
- *   3. Separate `tmux send-keys -t <session> Enter` (with Escape before Enter on AGY vessels)
+ * Option A Read-Only Security Boundary (#21):
+ * Blocks cross-site browser requests (`Sec-Fetch-Site: cross-site` or non-loopback `Origin`).
  */
-export function injectTmuxSessionMessage(sessionName: string, text: string): boolean {
-  if (!SAFE_SESSION_RE.test(sessionName) || !text.trim()) {
+export function isAllowedLocalReadRequest(req: IncomingMessage): boolean {
+  const secFetchSite = String(req.headers?.['sec-fetch-site'] ?? '')
+    .trim()
+    .toLowerCase()
+  if (secFetchSite === 'cross-site') {
     return false
   }
-  const singleLine = text.replace(/\r?\n+/g, ' ').trim()
-  try {
-    execFileSync('tmux', ['set-buffer', '--', singleLine], { timeout: 2000 })
-    execFileSync('tmux', ['paste-buffer', '-t', sessionName], { timeout: 2000 })
-    const paneCmd = runCmd(
-      'tmux',
-      ['display-message', '-p', '-t', sessionName, '#{pane_current_command}'],
-      1500
-    ).toLowerCase()
-    if (paneCmd.includes('agy')) {
-      execFileSync('tmux', ['send-keys', '-t', sessionName, 'Escape'], { timeout: 1500 })
-    }
-    execFileSync('tmux', ['send-keys', '-t', sessionName, 'Enter'], { timeout: 1500 })
-    return true
-  } catch {
+  const origin = String(req.headers?.origin ?? '').trim()
+  if (origin && !LOOPBACK_ORIGIN_RE.test(origin)) {
     return false
   }
-}
-
-export function buildCommunicateBrokerPrompt(
-  fromSession: string,
-  toSession: string,
-  instruction: string
-): string {
-  return `Please use your aim-communicate skill to send a message to tmux session ${toSession} (declare FROM: ${fromSession} and REPLY_TO: ${fromSession}) with this directive/question: ${instruction.trim()}`
-}
-
-function readJsonBody(req: IncomingMessage): Promise<Record<string, unknown>> {
-  return new Promise((resolve) => {
-    let body = ''
-    req.on('data', (chunk) => {
-      body += String(chunk)
-    })
-    req.on('end', () => {
-      try {
-        resolve(body ? (JSON.parse(body) as Record<string, unknown>) : {})
-      } catch {
-        resolve({})
-      }
-    })
-    req.on('error', () => resolve({}))
-  })
+  return true
 }
 
 function sendJson(res: ServerResponse, statusCode: number, payload: unknown): void {
   res.statusCode = statusCode
   res.setHeader('Content-Type', 'application/json; charset=utf-8')
+  res.setHeader('X-Content-Type-Options', 'nosniff')
   res.end(JSON.stringify(payload))
+}
+
+/**
+ * Handles `/api/office/*` requests under Option A (Pure Read-Only Visual Command Center, #21).
+ * All tmux write/injection (`reply`, `communicate`) and raw terminal scrollback (`output`) routes
+ * are permanently disabled so AIM-Office carries zero command-execution or terminal-leakage risk;
+ * authenticated E2EE, WebAuthn biometrics, TOTP, and spoken-summary TTS remain exclusively in AIM-Connect.
+ */
+export async function handleOfficeBridgeRequest(
+  req: IncomingMessage,
+  res: ServerResponse
+): Promise<boolean> {
+  const rawUrl = req.url || ''
+  if (!rawUrl.startsWith('/api/office/')) {
+    return false
+  }
+
+  if (!isAllowedLocalReadRequest(req)) {
+    sendJson(res, 403, {
+      error: 'Cross-origin access to AIM-Office local telemetry is forbidden.',
+      code: 'CROSS_ORIGIN_BLOCKED',
+    })
+    return true
+  }
+
+  const method = (req.method || 'GET').toUpperCase()
+  const parsedUrl = new URL(rawUrl, 'http://127.0.0.1:5175')
+  const pathname = parsedUrl.pathname
+
+  if (
+    method !== 'GET' ||
+    pathname.startsWith('/api/office/session/') ||
+    pathname === '/api/office/communicate'
+  ) {
+    sendJson(res, 403, {
+      error:
+        'Read-only visualizer boundary (#21): tmux command injection and raw terminal scrollback are disabled in AIM-Office. Open AIM-Connect (:8000) for authenticated E2EE & biometric control.',
+      code: 'READ_ONLY_MODE',
+    })
+    return true
+  }
+
+  if (pathname === '/api/office/fleet') {
+    const fleet = await fetchFleetFromAimConnect()
+    sendJson(res, 200, {
+      fleet,
+      dispatches: [],
+      mode: 'read-only',
+    })
+    return true
+  }
+
+  if (pathname === '/api/office/kanban') {
+    const session = parsedUrl.searchParams.get('session') || 'aim-office'
+    const data = fetchProjectKanbanForSession(session)
+    sendJson(res, 200, data)
+    return true
+  }
+
+  return false
 }
 
 export function createOfficeBridgePlugin(): Plugin {
   return {
-    name: 'aim-office-local-tmux-bridge',
+    name: 'aim-office-readonly-telemetry-bridge',
     configureServer(server) {
       server.middlewares.use(async (req, res, next) => {
-        const rawUrl = req.url || ''
-        if (!rawUrl.startsWith('/api/office/')) {
-          return next()
+        const handled = await handleOfficeBridgeRequest(req, res)
+        if (!handled) {
+          next()
         }
-
-        const parsedUrl = new URL(rawUrl, 'http://localhost:5175')
-        const pathname = parsedUrl.pathname
-
-        if (req.method === 'GET' && pathname === '/api/office/fleet') {
-          const fleet = await fetchFleetFromAimConnect()
-          return sendJson(res, 200, {
-            fleet,
-            dispatches: recentCommunicateDispatches,
-          })
-        }
-
-        if (req.method === 'GET' && pathname === '/api/office/kanban') {
-          const session = parsedUrl.searchParams.get('session') || 'aim-office'
-          const data = fetchProjectKanbanForSession(session)
-          return sendJson(res, 200, data)
-        }
-
-        const outputMatch = pathname.match(/^\/api\/office\/session\/([^/]+)\/output$/)
-        if (req.method === 'GET' && outputMatch) {
-          const session = decodeURIComponent(outputMatch[1])
-          const data = captureCleanSessionOutput(session)
-          return sendJson(res, 200, data)
-        }
-
-        const replyMatch = pathname.match(/^\/api\/office\/session\/([^/]+)\/reply$/)
-        if (req.method === 'POST' && replyMatch) {
-          const session = decodeURIComponent(replyMatch[1])
-          const body = await readJsonBody(req)
-          const message = String(body.message ?? body.command ?? '').trim()
-          if (!message) {
-            return sendJson(res, 400, { error: 'Message cannot be empty' })
-          }
-          const ok = injectTmuxSessionMessage(session, message)
-          return sendJson(res, ok ? 200 : 500, {
-            status: ok ? 'sent' : 'failed',
-            session,
-            message,
-          })
-        }
-
-        if (req.method === 'POST' && pathname === '/api/office/communicate') {
-          const body = await readJsonBody(req)
-          const fromSession = String(body.fromSession ?? '').trim()
-          const toSession = String(body.toSession ?? '').trim()
-          const instruction = String(body.instruction ?? '').trim()
-          if (!fromSession || !toSession || !instruction) {
-            return sendJson(res, 400, {
-              error: 'fromSession, toSession, and instruction are required',
-            })
-          }
-          const prompt = buildCommunicateBrokerPrompt(fromSession, toSession, instruction)
-          const injected = injectTmuxSessionMessage(fromSession, prompt)
-          const dispatchEvent: RecordedCommunicateDispatch = {
-            id: `broker-${Date.now()}`,
-            filename: 'AIM_COMMUNICATE_BROKER.md',
-            sender: fromSession,
-            recipient: toSession,
-            reply_to: fromSession,
-            mtime: Math.floor(Date.now() / 1000),
-            preview: `[${fromSession} -> ${toSession}] ${instruction}`,
-          }
-          recentCommunicateDispatches.unshift(dispatchEvent)
-          if (recentCommunicateDispatches.length > 25) {
-            recentCommunicateDispatches.pop()
-          }
-          return sendJson(res, 200, {
-            status: injected ? 'dispatched' : 'simulated',
-            injected,
-            prompt,
-            dispatch: dispatchEvent,
-          })
-        }
-
-        return next()
       })
     },
   }

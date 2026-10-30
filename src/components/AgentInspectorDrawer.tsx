@@ -5,55 +5,29 @@ import {
   defaultAimConnectClient,
   formatTokenCountCompact,
   SessionForensicsPayload,
-  SessionOutputPayload,
   WorkspaceContextPayload,
 } from '../services/aimConnectClient'
 
 export interface AgentInspectorDrawerProps {
   character: OfficeCharacter | null
-  allCharacters?: OfficeCharacter[]
   client?: AimConnectClient
   demoMode?: boolean
   aimConnectBaseUrl?: string
   onClose: () => void
   onDispatchCourierFromAgent?: (character: OfficeCharacter) => void
-  onDispatchAimCommunicate?: (dispatch: {
-    sender: string
-    recipient: string
-    preview: string
-  }) => void
 }
-
-const MACRO_COMMANDS: ReadonlyArray<{ id: string; label: string; command: string }> = [
-  { id: 'wiki', label: '🧠 /aim-memory-wiki', command: '/aim-memory-wiki' },
-  { id: 'handoff', label: '🤝 /aim-handoff', command: '/aim-handoff' },
-  { id: 'board', label: '📋 ./aim projects board', command: './aim projects board' },
-  { id: 'proceed', label: '✅ Proceed', command: 'Proceed' },
-]
 
 export const AgentInspectorDrawer: React.FC<AgentInspectorDrawerProps> = ({
   character,
-  allCharacters = [],
   client = defaultAimConnectClient,
   demoMode = false,
   aimConnectBaseUrl = 'http://localhost:8000',
   onClose,
   onDispatchCourierFromAgent,
-  onDispatchAimCommunicate,
 }) => {
   const [forensics, setForensics] = useState<SessionForensicsPayload | null>(null)
   const [workspaceCtx, setWorkspaceCtx] = useState<WorkspaceContextPayload | null>(null)
-  const [sessionOutput, setSessionOutput] = useState<SessionOutputPayload | null>(null)
   const [loading, setLoading] = useState<boolean>(false)
-
-  const [replyText, setReplyText] = useState<string>('')
-  const [replyStatus, setReplyStatus] = useState<string | null>(null)
-  const [isListening, setIsListening] = useState<boolean>(false)
-  const [ttsStatus, setTtsStatus] = useState<string | null>(null)
-
-  const [targetSession, setTargetSession] = useState<string>('aim-joshua')
-  const [communicateInstruction, setCommunicateInstruction] = useState<string>('')
-  const [communicateStatus, setCommunicateStatus] = useState<string | null>(null)
 
   // Floating overlay drag state so the user can move the card anywhere over the fullscreen office
   const [dragOffset, setDragOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 })
@@ -66,35 +40,20 @@ export const AgentInspectorDrawer: React.FC<AgentInspectorDrawerProps> = ({
     if (!character) {
       setForensics(null)
       setWorkspaceCtx(null)
-      setSessionOutput(null)
-      setReplyText('')
-      setReplyStatus(null)
-      setTtsStatus(null)
-      setCommunicateInstruction('')
-      setCommunicateStatus(null)
       return
     }
 
-    const defaultTarget =
-      character.sessionName === 'aim-joshua' ? 'aim-office' : 'aim-joshua'
-    setTargetSession(defaultTarget)
-    setCommunicateStatus(null)
-
     let cancelled = false
     setLoading(true)
-    setReplyStatus(null)
-    setTtsStatus(null)
 
     Promise.all([
       client.fetchSessionForensics(character.sessionName, demoMode),
       client.fetchWorkspaceContext(character.sessionName, demoMode),
-      client.fetchSessionOutput(character.sessionName, demoMode),
     ])
-      .then(([forensicsData, wsData, outputData]) => {
+      .then(([forensicsData, wsData]) => {
         if (cancelled) return
         setForensics(forensicsData)
         setWorkspaceCtx(wsData)
-        setSessionOutput(outputData)
         setLoading(false)
       })
       .catch(() => {
@@ -149,113 +108,6 @@ export const AgentInspectorDrawer: React.FC<AgentInspectorDrawerProps> = ({
     }
   }
 
-  const handleReadAloud = () => {
-    const text =
-      sessionOutput?.output ||
-      `${character.sessionName} is currently ${character.status} at ${character.context.pct} percent context.`
-    try {
-      if (typeof window !== 'undefined' && 'speechSynthesis' in window && window.speechSynthesis) {
-        window.speechSynthesis.cancel()
-        if (typeof SpeechSynthesisUtterance !== 'undefined') {
-          const utterance = new SpeechSynthesisUtterance(text)
-          window.speechSynthesis.speak(utterance)
-        }
-      }
-      setTtsStatus('🔊 Reading last response aloud...')
-    } catch {
-      setTtsStatus('🔊 TTS Readout Dispatched')
-    }
-  }
-
-  const handleToggleMicDictation = () => {
-    const SpeechRec =
-      typeof window !== 'undefined'
-        ? (window as unknown as Record<string, unknown>).SpeechRecognition ||
-          (window as unknown as Record<string, unknown>).webkitSpeechRecognition
-        : null
-
-    if (SpeechRec && typeof SpeechRec === 'function') {
-      try {
-        const rec = new (SpeechRec as new () => {
-          lang: string
-          interimResults: boolean
-          onresult: ((e: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null
-          onend: (() => void) | null
-          start: () => void
-        })()
-        rec.lang = 'en-US'
-        rec.interimResults = false
-        setIsListening(true)
-        rec.onresult = (event) => {
-          const transcript = event.results?.[0]?.[0]?.transcript || ''
-          if (transcript) {
-            setReplyText((prev) => (prev ? `${prev} ${transcript}` : transcript))
-          }
-        }
-        rec.onend = () => setIsListening(false)
-        rec.start()
-        return
-      } catch {
-        // Fall through to simulated voice dictation indicator
-      }
-    }
-
-    setIsListening((prev) => !prev)
-    if (!replyText.trim()) {
-      setReplyText('Status report requested via voice dictation')
-    }
-  }
-
-  const handleSendReply = async (customMessage?: string) => {
-    const textToSend = (customMessage ?? replyText).trim()
-    if (!textToSend) return
-
-    const res = await client.sendSessionReply(character.sessionName, textToSend, demoMode)
-    if (res.status) {
-      setReplyStatus(`✅ Sent to ${character.sessionName}: "${textToSend}"`)
-      if (!customMessage) {
-        setReplyText('')
-      }
-    }
-  }
-
-  const peerSessions = Array.from(
-    new Set([
-      ...allCharacters.map((c) => c.sessionName),
-      'aim-joshua',
-      'aim-office',
-      'aim-connect',
-      'aim-grok',
-      'aim-ld',
-    ])
-  ).filter((s) => s !== character.sessionName)
-
-  const handleDispatchCommunicate = async () => {
-    const instruction =
-      communicateInstruction.trim() ||
-      `Sync status and report latest GitOps milestone to ${targetSession}`
-    const recipient = targetSession || peerSessions[0] || 'aim-joshua'
-
-    const res = await client.dispatchAimCommunicate(
-      character.sessionName,
-      recipient,
-      instruction,
-      demoMode
-    )
-    if (res.status) {
-      const preview = `[DISPATCH ${character.sessionName} -> ${recipient}] ${instruction}`
-      setCommunicateStatus(
-        `📡 Dispatched aim-communicate: ${character.sessionName} → ${recipient}`
-      )
-      setCommunicateInstruction('')
-      onDispatchAimCommunicate?.({
-        sender: character.sessionName,
-        recipient,
-        preview,
-      })
-    }
-  }
-
   return (
     <aside
       className={`agent-inspector-drawer is-floating-overlay${
@@ -263,6 +115,7 @@ export const AgentInspectorDrawer: React.FC<AgentInspectorDrawerProps> = ({
       }`}
       data-testid="agent-inspector-drawer"
       data-floating="true"
+      data-readonly="true"
       data-drag-offset={`${dragOffset.x},${dragOffset.y}`}
       aria-label={`Agent Inspector for ${character.sessionName}`}
       style={{
@@ -393,154 +246,38 @@ export const AgentInspectorDrawer: React.FC<AgentInspectorDrawerProps> = ({
           </div>
           <p className="context-hint">
             {isAmnesia
-              ? 'Threshold >= 30% crossed: execute /aim-memory-wiki and /aim-handoff.'
+              ? 'Threshold >= 30% crossed: open AIM-Connect to execute /aim-memory-wiki and /aim-handoff.'
               : 'Operating within sovereign < 30% recall precision envelope.'}
           </p>
         </section>
 
-        {/* Last Agent Response Viewer + TTS Read-Aloud */}
-        <section className="drawer-section">
+        {/* Option A (#21): Read-Only Visualizer Boundary & Hardened AIM-Connect Deep-Link Gateway */}
+        <section
+          className="drawer-section readonly-gateway-card"
+          data-testid="inspector-readonly-gateway"
+        >
           <div className="section-label-row">
-            <span>Last Agent Response (Live Tmux Scrollback)</span>
-            <button
-              type="button"
-              className="btn-tts-read-aloud"
-              data-testid="btn-tts-read-aloud"
-              onClick={handleReadAloud}
-              title="Read last agent response aloud via SpeechSynthesis TTS"
-            >
-              🔊 Read Aloud
-            </button>
+            <span>🔒 Sovereign Security Boundary (Read-Only Visualizer)</span>
+            <span className="readonly-shield-badge" data-testid="inspector-readonly-badge">
+              ZERO-EXECUTION MODE
+            </span>
           </div>
-          <pre className="inspector-last-response-box" data-testid="inspector-last-response">
-            {sessionOutput?.output ||
-              `[${character.sessionName}] Active on ${character.gitBranch || 'main'} (${character.status})`}
-          </pre>
-          {ttsStatus && (
-            <div className="tts-status-pill" data-testid="tts-status">
-              {ttsStatus}
-            </div>
-          )}
+          <p className="readonly-gateway-copy">
+            Direct <code>tmux</code> prompt injection and raw terminal scrollback scraping are
+            disabled in AIM-Office. All interactive agent commands, WebAuthn biometrics, TOTP, E2EE
+            encryption, and <code>🔊</code> spoken-summary audio run exclusively through{' '}
+            <strong>AIM-Connect</strong>.
+          </p>
+          <div className="readonly-status-preview" data-testid="inspector-telemetry-preview">
+            <span className="meta-key">Telemetry Pulse:</span>{' '}
+            <code>
+              {character.activeToolPill ||
+                `[${character.sessionName}] ${character.status} on ${
+                  workspaceCtx?.branch || character.gitBranch || 'main'
+                }`}
+            </code>
+          </div>
         </section>
-
-        {/* 2-Column Wide Grid: Direct Reply Cockpit (Left) + 1-Click AIM-Communicate Broker (Right) */}
-        <div className="inspector-two-col-grid">
-          {/* Direct Reply Cockpit + Voice STT + 1-Tap Macro Pills */}
-          <section className="drawer-section" data-testid="inspector-direct-reply-section">
-            <div className="section-label-row">
-              <span>Direct Tmux Reply & Voice / Macros</span>
-              <button
-                type="button"
-                className={`btn-mic-dictation${isListening ? ' is-listening' : ''}`}
-                data-testid="btn-mic-dictation"
-                onClick={handleToggleMicDictation}
-                title="Dictate reply via Web Speech API (SpeechRecognition)"
-              >
-                {isListening ? '🔴 Listening...' : '🎤 Voice Mic'}
-              </button>
-            </div>
-            <div className="direct-reply-input-row">
-              <input
-                type="text"
-                className="input-direct-reply"
-                data-testid="input-direct-reply"
-                placeholder={`Send prompt directly to ${character.sessionName}...`}
-                value={replyText}
-                onChange={(e) => setReplyText(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault()
-                    void handleSendReply()
-                  }
-                }}
-              />
-              <button
-                type="button"
-                className="btn-send-direct-reply"
-                data-testid="btn-send-direct-reply"
-                onClick={() => void handleSendReply()}
-              >
-                Send ↵
-              </button>
-            </div>
-
-            {/* 1-Tap Sovereign Macro Pills */}
-            <div className="macro-pills-bar" data-testid="macro-pills-bar">
-              {MACRO_COMMANDS.map((macro) => (
-                <button
-                  key={macro.id}
-                  type="button"
-                  className="btn-macro-pill"
-                  data-testid={`btn-macro-${macro.id}`}
-                  onClick={() => void handleSendReply(macro.command)}
-                >
-                  {macro.label}
-                </button>
-              ))}
-            </div>
-
-            {replyStatus && (
-              <div className="reply-dispatch-status" data-testid="reply-dispatch-status">
-                {replyStatus}
-              </div>
-            )}
-          </section>
-
-          {/* 1-Click AIM-Communicate Broker Dropdown + Physical Courier Walk Trigger (#7) */}
-          <section className="drawer-section" data-testid="inspector-communicate-broker">
-            <div className="section-label-row">
-              <span>📡 1-Click `aim-communicate` Broker</span>
-              <span className="muted-count">Courier Walk</span>
-            </div>
-            <div className="communicate-broker-row">
-              <select
-                className="select-communicate-target"
-                data-testid="select-communicate-target"
-                aria-label="Target Agent Session"
-                value={targetSession}
-                onChange={(e) => setTargetSession(e.target.value)}
-              >
-                {peerSessions.map((peer) => (
-                  <option key={peer} value={peer}>
-                    → {peer}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="communicate-broker-row">
-              <input
-                type="text"
-                className="input-communicate-instruction"
-                data-testid="input-communicate-instruction"
-                placeholder={`Directive for ${character.sessionName} to send ${targetSession}...`}
-                value={communicateInstruction}
-                onChange={(e) => setCommunicateInstruction(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault()
-                    void handleDispatchCommunicate()
-                  }
-                }}
-              />
-              <button
-                type="button"
-                className="btn-dispatch-communicate"
-                data-testid="btn-dispatch-communicate"
-                onClick={() => void handleDispatchCommunicate()}
-              >
-                🚶 Dispatch
-              </button>
-            </div>
-            {communicateStatus && (
-              <div
-                className="communicate-dispatch-status"
-                data-testid="communicate-dispatch-status"
-              >
-                {communicateStatus}
-              </div>
-            )}
-          </section>
-        </div>
 
         {/* 2-Column Wide Grid: Forensic Tool Call Pills (Left) + GitOps Worktree & Wiki Delta (Right) */}
         <div className="inspector-two-col-grid">
@@ -575,7 +312,11 @@ export const AgentInspectorDrawer: React.FC<AgentInspectorDrawerProps> = ({
             <div className="workspace-meta-grid">
               <div>
                 <span className="meta-key">Active Path:</span>{' '}
-                <code>{workspaceCtx?.panePath || character.worktreePath || `/home/kingb/${character.sessionName}`}</code>
+                <code>
+                  {workspaceCtx?.panePath ||
+                    character.worktreePath ||
+                    `/home/kingb/${character.sessionName}`}
+                </code>
               </div>
               {workspaceCtx?.worktrees && workspaceCtx.worktrees.length > 0 && (
                 <div>
@@ -612,15 +353,16 @@ export const AgentInspectorDrawer: React.FC<AgentInspectorDrawerProps> = ({
           className="btn-open-aim-connect"
           data-testid="link-open-aim-connect"
         >
-          🖥️ Open Terminal in AIM-Connect
+          🔒 Command {character.sessionName} in AIM-Connect (E2EE + Bio)
         </a>
         {onDispatchCourierFromAgent && (
           <button
             type="button"
             className="btn-secondary-courier"
+            data-testid="btn-preview-courier-walk"
             onClick={() => onDispatchCourierFromAgent(character)}
           >
-            📨 Walk Report to J.O.S.H.U.A.
+            📨 Preview Visual Walk to J.O.S.H.U.A.
           </button>
         )}
       </div>

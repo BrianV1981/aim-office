@@ -1368,6 +1368,40 @@ body {
   color: #cbd5e1;
 }
 
+.readonly-gateway-card {
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  background: rgba(8, 18, 34, 0.96);
+}
+
+.readonly-shield-badge {
+  display: inline-block;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: #6ee7b7;
+  background: rgba(6, 78, 59, 0.72);
+  border: 1px solid rgba(16, 185, 129, 0.45);
+}
+
+.readonly-gateway-copy {
+  margin: 6px 0 8px;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: #cbd5e1;
+}
+
+.readonly-status-preview {
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: rgba(2, 6, 23, 0.85);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  font-size: 11px;
+  color: #e2e8f0;
+  overflow-wrap: anywhere;
+}
+
 .drawer-footer {
   display: flex;
   flex-direction: column;

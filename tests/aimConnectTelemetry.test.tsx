@@ -7,6 +7,8 @@ import {
 } from '../src/services/aimConnectClient'
 import {
   fetchFleetFromAimConnect,
+  handleOfficeBridgeRequest,
+  isAllowedLocalReadRequest,
   parsePaneScrollbackTelemetry,
 } from '../src/server/officeBridge'
 import {
@@ -229,5 +231,96 @@ describe('AIM-Connect Fleet Telemetry Bridge & Office Director (#2 & #5)', () =>
     expect(fetchSpy).toHaveBeenCalledTimes(1)
 
     fetchSpy.mockRestore()
+  })
+
+  it('enforces Option A read-only telemetry boundary (#21): blocks tmux reply/communicate/output routes and rejects cross-site origins', async () => {
+    function makeMockRes() {
+      let body = ''
+      const headers: Record<string, string> = {}
+      const res: any = {
+        statusCode: 200,
+        setHeader: (k: string, v: string) => {
+          headers[k.toLowerCase()] = v
+        },
+        end: (chunk: string) => {
+          body = chunk
+        },
+        getJson: () => JSON.parse(body || '{}'),
+        headers,
+      }
+      return res
+    }
+
+    // 1. Block POST /api/office/session/:session/reply (CSRF/RCE vector)
+    const replyRes = makeMockRes()
+    const replyHandled = await handleOfficeBridgeRequest(
+      { method: 'POST', url: '/api/office/session/aim-joshua/reply', headers: {} } as any,
+      replyRes
+    )
+    expect(replyHandled).toBe(true)
+    expect(replyRes.statusCode).toBe(403)
+    expect(replyRes.getJson().code).toBe('READ_ONLY_MODE')
+
+    // 2. Block POST /api/office/communicate (broker injection vector)
+    const commRes = makeMockRes()
+    const commHandled = await handleOfficeBridgeRequest(
+      { method: 'POST', url: '/api/office/communicate', headers: {} } as any,
+      commRes
+    )
+    expect(commHandled).toBe(true)
+    expect(commRes.statusCode).toBe(403)
+    expect(commRes.getJson().code).toBe('READ_ONLY_MODE')
+
+    // 3. Block GET /api/office/session/:session/output (raw scrollback leakage vector)
+    const outRes = makeMockRes()
+    const outHandled = await handleOfficeBridgeRequest(
+      { method: 'GET', url: '/api/office/session/aim-joshua/output', headers: {} } as any,
+      outRes
+    )
+    expect(outHandled).toBe(true)
+    expect(outRes.statusCode).toBe(403)
+    expect(outRes.getJson().code).toBe('READ_ONLY_MODE')
+
+    // 4. Block cross-site browser requests (`Sec-Fetch-Site: cross-site` or foreign `Origin`)
+    expect(
+      isAllowedLocalReadRequest({
+        headers: { 'sec-fetch-site': 'cross-site' },
+      } as any)
+    ).toBe(false)
+    expect(
+      isAllowedLocalReadRequest({
+        headers: { origin: 'https://malicious.example.com' },
+      } as any)
+    ).toBe(false)
+    expect(
+      isAllowedLocalReadRequest({
+        headers: { origin: 'http://127.0.0.1:5175', 'sec-fetch-site': 'same-origin' },
+      } as any)
+    ).toBe(true)
+
+    const crossRes = makeMockRes()
+    await handleOfficeBridgeRequest(
+      {
+        method: 'GET',
+        url: '/api/office/fleet',
+        headers: { origin: 'https://evil.example' },
+      } as any,
+      crossRes
+    )
+    expect(crossRes.statusCode).toBe(403)
+    expect(crossRes.getJson().code).toBe('CROSS_ORIGIN_BLOCKED')
+
+    // 5. Allow local same-origin GET /api/office/fleet in read-only mode
+    const okRes = makeMockRes()
+    await handleOfficeBridgeRequest(
+      {
+        method: 'GET',
+        url: '/api/office/fleet',
+        headers: { origin: 'http://localhost:5175', 'sec-fetch-site': 'same-origin' },
+      } as any,
+      okRes
+    )
+    expect(okRes.statusCode).toBe(200)
+    expect(okRes.getJson().mode).toBe('read-only')
   })
 })

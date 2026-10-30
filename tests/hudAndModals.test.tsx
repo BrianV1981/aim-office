@@ -70,15 +70,17 @@ describe('AIM-Office HUD Command Bar, Forensic Inspector Drawer & Kanban Modal (
     expect(onOpenWhiteboard).toHaveBeenCalledTimes(1)
   })
 
-  it('populates AgentInspectorDrawer with session telemetry, last response viewer, TTS, direct reply, Mic STT, Macro pills, and forensic pills', async () => {
+  it('populates AgentInspectorDrawer in strict Read-Only Visualizer mode (#21) with telemetry, forensic pills, worktree/wiki delta, and AIM-Connect gateway link', async () => {
     const officeChar = sampleCharacters.find((c) => c.sessionName === 'aim-office')!
     const onClose = vi.fn()
+    const onDispatchCourierFromAgent = vi.fn()
 
     render(
       <AgentInspectorDrawer
         character={officeChar}
         demoMode={true}
         onClose={onClose}
+        onDispatchCourierFromAgent={onDispatchCourierFromAgent}
       />
     )
 
@@ -86,37 +88,26 @@ describe('AIM-Office HUD Command Bar, Forensic Inspector Drawer & Kanban Modal (
     expect(screen.getByTestId('inspector-context-pct')).toHaveTextContent('18%')
     expect(screen.getByTestId('dossier-stat-strip')).toHaveTextContent('82% OPTIMAL')
     expect(screen.getByTestId('agent-inspector-drawer')).toHaveAttribute('data-floating', 'true')
+    expect(screen.getByTestId('agent-inspector-drawer')).toHaveAttribute('data-readonly', 'true')
     expect(screen.getByTestId('agent-inspector-drawer').style.zIndex).toBe('3100')
     expect(screen.getByTestId('inspector-drag-handle')).toBeInTheDocument()
 
+    // Verify Option A Read-Only Security Boundary card & telemetry pulse
+    expect(screen.getByTestId('inspector-readonly-gateway')).toBeInTheDocument()
+    expect(screen.getByTestId('inspector-readonly-badge')).toHaveTextContent('ZERO-EXECUTION MODE')
+    expect(screen.getByTestId('inspector-telemetry-preview')).toHaveTextContent('Vitest')
+
+    // Ensure all tmux write/injection and raw scrollback DOM elements are completely removed (#21)
+    expect(screen.queryByTestId('input-direct-reply')).toBeNull()
+    expect(screen.queryByTestId('btn-send-direct-reply')).toBeNull()
+    expect(screen.queryByTestId('macro-pills-bar')).toBeNull()
+    expect(screen.queryByTestId('select-communicate-target')).toBeNull()
+    expect(screen.queryByTestId('input-communicate-instruction')).toBeNull()
+    expect(screen.queryByTestId('btn-dispatch-communicate')).toBeNull()
+    expect(screen.queryByTestId('inspector-last-response')).toBeNull()
+
     await waitFor(() => {
       expect(screen.getByTestId('inspector-forensic-pills')).toHaveTextContent('[Bash]')
-      expect(screen.getByTestId('inspector-last-response')).toHaveTextContent('[aim-office]')
-    })
-
-    // Trigger TTS Read-Aloud
-    fireEvent.click(screen.getByTestId('btn-tts-read-aloud'))
-    expect(screen.getByTestId('tts-status')).toHaveTextContent('🔊')
-
-    // Trigger Mic Dictation fallback
-    fireEvent.click(screen.getByTestId('btn-mic-dictation'))
-    const replyInput = screen.getByTestId('input-direct-reply') as HTMLInputElement
-    expect(replyInput.value).toContain('voice dictation')
-
-    // Send direct reply
-    fireEvent.change(replyInput, { target: { value: 'Run unit tests now' } })
-    fireEvent.click(screen.getByTestId('btn-send-direct-reply'))
-
-    await waitFor(() => {
-      expect(screen.getByTestId('reply-dispatch-status')).toHaveTextContent(
-        'Sent to aim-office: "Run unit tests now"'
-      )
-    })
-
-    // Trigger 1-tap macro pill
-    fireEvent.click(screen.getByTestId('btn-macro-wiki'))
-    await waitFor(() => {
-      expect(screen.getByTestId('reply-dispatch-status')).toHaveTextContent('/aim-memory-wiki')
     })
 
     expect(screen.getByTestId('inspector-git-branch')).toHaveTextContent('fix/issue-2')
@@ -124,47 +115,10 @@ describe('AIM-Office HUD Command Bar, Forensic Inspector Drawer & Kanban Modal (
 
     const terminalLink = screen.getByTestId('link-open-aim-connect') as HTMLAnchorElement
     expect(terminalLink.href).toContain('http://localhost:8000/?session=aim-office')
-  })
 
-  it('dispatches 1-click aim-communicate broker instructions and triggers physical courier walk (#7)', async () => {
-    const officeChar = sampleCharacters.find((c) => c.sessionName === 'aim-office')!
-    const onClose = vi.fn()
-    const onDispatchAimCommunicate = vi.fn()
-
-    render(
-      <AgentInspectorDrawer
-        character={officeChar}
-        allCharacters={sampleCharacters}
-        demoMode={true}
-        onClose={onClose}
-        onDispatchAimCommunicate={onDispatchAimCommunicate}
-      />
-    )
-
-    const targetSelect = screen.getByTestId('select-communicate-target') as HTMLSelectElement
-    fireEvent.change(targetSelect, { target: { value: 'aim-ld' } })
-
-    const instructionInput = screen.getByTestId(
-      'input-communicate-instruction'
-    ) as HTMLInputElement
-    fireEvent.change(instructionInput, {
-      target: { value: 'Verify LeadDeeds Project #11 Kanban board sync' },
-    })
-
-    fireEvent.click(screen.getByTestId('btn-dispatch-communicate'))
-
-    await waitFor(() => {
-      expect(screen.getByTestId('communicate-dispatch-status')).toHaveTextContent(
-        'aim-office → aim-ld'
-      )
-    })
-
-    expect(onDispatchAimCommunicate).toHaveBeenCalledWith({
-      sender: 'aim-office',
-      recipient: 'aim-ld',
-      preview:
-        '[DISPATCH aim-office -> aim-ld] Verify LeadDeeds Project #11 Kanban board sync',
-    })
+    // Visual-only courier walk preview triggers local animation callback without network POST
+    fireEvent.click(screen.getByTestId('btn-preview-courier-walk'))
+    expect(onDispatchCourierFromAgent).toHaveBeenCalledWith(officeChar)
   })
 
   it('switches Kanban board per project (e.g. aim-ld -> Project #5, aim-joshua -> Project #7) and updates WallTaskBoard & WhiteboardModal (#10)', async () => {

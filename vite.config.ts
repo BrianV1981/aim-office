@@ -7,6 +7,7 @@ const aimConnectTarget = process.env.VITE_AIM_CONNECT_URL || 'http://localhost:8
 export default defineConfig({
   plugins: [react(), createOfficeBridgePlugin()],
   server: {
+    host: '127.0.0.1',
     port: 5175,
     strictPort: false,
     watch: {
@@ -35,7 +36,7 @@ export default defineConfig({
   },
   preview: {
     port: 5175,
-    host: '0.0.0.0',
+    host: '127.0.0.1',
   },
   test: {
     globals: true,
