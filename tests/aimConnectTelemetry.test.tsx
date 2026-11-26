@@ -545,6 +545,10 @@ describe('AIM-Connect Fleet Telemetry Bridge & Office Director (#2 & #5)', () =>
       false
     )
 
+    const auditorDemo = DEMO_FLEET_PANES.find((p) => p.sessionName === 'aim-auditor')!
+    expect(auditorDemo.path).toBe('~/aim-agents/aim-auditor')
+    expect(auditorDemo.repoName).toBe('aim-auditor')
+
     fs.rmSync(tmpDir, { recursive: true, force: true })
   })
 })

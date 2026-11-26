@@ -6,6 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ---
 
+## [1.0.1] - 2026-11-25
+
+### Security
+- **Host Loopback Token Telemetry Bridge (`#30`):** Read host-only `0600` `~/aim-connect/backend/loopback.token` (or `AIM_LOOPBACK_TOKEN`) and attach `X-AIM-Loopback-Token` on local `aim-connect` `/api/fleet/panes` and `/api/swarm/activity` requests (`aim-connect#236`).
+- **Full `/api/*` Cross-Origin & `GET`-Only Guard (`#23`):** Removed raw Vite `server.proxy` routes and gated every `/api/*` path through `handleOfficeBridgeRequest()` (`HTTP 403 CROSS_ORIGIN_BLOCKED` and `HTTP 403 READ_ONLY_MODE` with zero wildcard CORS).
+- **Preview Server Parity (`#25`):** Wired `configurePreviewServer` alongside `configureServer` in `createOfficeBridgePlugin()` so `vite preview` serves `/api/office/*` JSON and enforces `HTTP 403` boundaries.
+
+### Fixed
+- **Ground-Truth Read-Only Inspector (`#24`):** Added read-only `GET /api/office/forensics` (structured transcript tool-call summaries without terminal scrollback) and `GET /api/office/workspace` (branch, git worktrees, brain files, and real `memory-wiki/log.md` delta), eliminating silent `HTTP 401` Demo fabrication when `demoMode === false`.
+- **Per-Session Kanban Resolution (`#27`):** Prevented inherited template `CONFIG.json` (`number: 7` with empty `repo`) from overriding `SESSION_PROJECT_MAP`, removed the `<= 14` GitHub Project ceiling, and ignored indented metadata sub-bullets in `HANDOFF.md`.
+- **Sprite CLI Flags & Threshold Tooltip (`#28`):** Added `--input` / `--slug` flag aliases alongside positional arguments in `scripts/slice_sprite_sheet.py`, updated `README.md`, and aligned the `AgentInspectorDrawer` `green < 20%` tooltip.
+- **CI Workflow, Pillow 14 Compatibility & Repo Hygiene (`#26`, `#29`):** Added `.github/workflows/ci.yml`, migrated `tests/test_slice_sprite.py` to `get_flattened_data()`, updated `aim-auditor` demo path (`~/aim-agents/aim-auditor`), and pruned merged `archive-fix/*` branches.
+
+---
+
 ## [1.0.0] - 2026-10-30
 
 ### Security

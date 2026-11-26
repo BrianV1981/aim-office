@@ -1,6 +1,6 @@
-# 🏢 AIM-Office (`v1.0.0`)
+# 🏢 AIM-Office (`v1.0.1`)
 
-[![Version](https://img.shields.io/badge/version-1.0.0-cyan.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.0.1-cyan.svg)](CHANGELOG.md)
 [![Security: Zero-Execution Read-Only](https://img.shields.io/badge/security-read--only%20visualizer-emerald.svg)](SECURITY.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
