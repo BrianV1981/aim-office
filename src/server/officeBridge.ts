@@ -602,15 +602,81 @@ export function collectLocalTmuxFleet(bypassCache = false): LocalFleetSessionRec
   return fleet
 }
 
+export interface LocalSwarmDispatchRecord {
+  id: string
+  filename: string
+  sender: string
+  recipient: string
+  reply_to: string
+  mtime: number
+  preview: string
+}
+
+let loopbackTokenCache: { ts: number; path: string; token: string } | null = null
+const LOOPBACK_TOKEN_CACHE_TTL_MS = 5_000
+
+let aimConnectSwarmCache: { ts: number; data: LocalSwarmDispatchRecord[] } | null = null
+const AIM_CONNECT_SWARM_CACHE_TTL_MS = 2_500
+
 /**
- * Primary Fleet Telemetry Bridge (#20):
- * Queries `aim-connect` (`http://127.0.0.1:8000/api/fleet/panes`) which uses activity-delta pane caching
- * and 2.0s snapshot caching, eliminating duplicate synchronous `tmux capture-pane` and SQLite subprocesses
- * inside the Vite dev server. Falls back to `collectLocalTmuxFleet()` only if `:8000` is unreachable.
+ * Resolve host-only `X-AIM-Loopback-Token` (#30 / `aim-connect#236`) from `AIM_LOOPBACK_TOKEN`
+ * or `~/aim-connect/backend/loopback.token` (`0600` host file) with 5s stat-friendly caching.
+ */
+export function resolveAimLoopbackToken(options?: {
+  tokenPath?: string
+  envToken?: string
+  bypassCache?: boolean
+}): string {
+  const explicitEnv = (options?.envToken ?? process.env.AIM_LOOPBACK_TOKEN ?? '').trim()
+  if (explicitEnv) {
+    return explicitEnv
+  }
+
+  const candidatePath =
+    options?.tokenPath ||
+    (process.env.AIM_LOOPBACK_TOKEN_PATH || '').trim() ||
+    path.join(USER_HOME_DIR, 'aim-connect', 'backend', 'loopback.token')
+
+  const now = Date.now()
+  if (
+    !options?.bypassCache &&
+    loopbackTokenCache &&
+    loopbackTokenCache.path === candidatePath &&
+    now - loopbackTokenCache.ts < LOOPBACK_TOKEN_CACHE_TTL_MS
+  ) {
+    return loopbackTokenCache.token
+  }
+
+  let token = ''
+  try {
+    if (fs.existsSync(candidatePath)) {
+      token = fs.readFileSync(candidatePath, 'utf-8').trim()
+    }
+  } catch {
+    token = ''
+  }
+
+  loopbackTokenCache = { ts: now, path: candidatePath, token }
+  return token
+}
+
+export function buildAimConnectLoopbackHeaders(loopbackToken?: string): Record<string, string> {
+  const token = (loopbackToken ?? resolveAimLoopbackToken()).trim()
+  return token
+    ? { Accept: 'application/json', 'X-AIM-Loopback-Token': token }
+    : { Accept: 'application/json' }
+}
+
+/**
+ * Primary Fleet Telemetry Bridge (#20, #30):
+ * Queries `aim-connect` (`http://127.0.0.1:8000/api/fleet/panes`) with host-only `X-AIM-Loopback-Token`,
+ * using activity-delta pane caching and 2.5s snapshot caching. Falls back to `collectLocalTmuxFleet()`
+ * only if `:8000` is unreachable or unauthenticated.
  */
 export async function fetchFleetFromAimConnect(
   baseUrl = process.env.VITE_AIM_CONNECT_URL || 'http://127.0.0.1:8000',
-  bypassCache = false
+  bypassCache = false,
+  loopbackToken?: string
 ): Promise<LocalFleetSessionRecord[]> {
   const now = Date.now()
   if (
@@ -624,6 +690,7 @@ export async function fetchFleetFromAimConnect(
   try {
     const cleanBase = baseUrl.replace(/\/$/, '')
     const resp = await fetch(`${cleanBase}/api/fleet/panes`, {
+      headers: buildAimConnectLoopbackHeaders(loopbackToken),
       signal: AbortSignal.timeout(1500),
     })
     if (resp.ok) {
@@ -993,10 +1060,52 @@ export function fetchProjectKanbanForSession(sessionName: string): {
   return result
 }
 
+export async function fetchSwarmActivityFromAimConnect(
+  baseUrl = process.env.VITE_AIM_CONNECT_URL || 'http://127.0.0.1:8000',
+  bypassCache = false,
+  loopbackToken?: string
+): Promise<LocalSwarmDispatchRecord[]> {
+  const now = Date.now()
+  if (
+    !bypassCache &&
+    aimConnectSwarmCache &&
+    now - aimConnectSwarmCache.ts < AIM_CONNECT_SWARM_CACHE_TTL_MS
+  ) {
+    return aimConnectSwarmCache.data
+  }
+
+  try {
+    const cleanBase = baseUrl.replace(/\/$/, '')
+    const resp = await fetch(`${cleanBase}/api/swarm/activity`, {
+      headers: buildAimConnectLoopbackHeaders(loopbackToken),
+      signal: AbortSignal.timeout(1500),
+    })
+    if (resp.ok) {
+      const json = (await resp.json()) as { dispatches?: Array<Record<string, unknown>> }
+      const rawList = Array.isArray(json?.dispatches) ? json.dispatches : []
+      const mapped: LocalSwarmDispatchRecord[] = rawList.slice(0, 30).map((d, idx) => ({
+        id: String(d.id ?? d.filename ?? `dispatch-${idx}`),
+        filename: String(d.filename ?? 'DISPATCH.md'),
+        sender: String(d.sender ?? 'aim-joshua'),
+        recipient: String(d.recipient ?? 'aim-office'),
+        reply_to: String(d.reply_to ?? d.sender ?? 'aim-joshua'),
+        mtime: Number(d.mtime ?? Math.floor(now / 1000)),
+        preview: String(d.preview ?? 'Inter-agent dispatch').slice(0, 140),
+      }))
+      aimConnectSwarmCache = { ts: now, data: mapped }
+      return mapped
+    }
+  } catch {
+    // Return empty list when upstream swarm activity is unreachable
+  }
+
+  return []
+}
+
 const LOOPBACK_ORIGIN_RE = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i
 
 /**
- * Option A Read-Only Security Boundary (#21):
+ * Option A Read-Only Security Boundary (#21, #23):
  * Blocks cross-site browser requests (`Sec-Fetch-Site: cross-site` or non-loopback `Origin`).
  */
 export function isAllowedLocalReadRequest(req: IncomingMessage): boolean {
@@ -1017,21 +1126,22 @@ function sendJson(res: ServerResponse, statusCode: number, payload: unknown): vo
   res.statusCode = statusCode
   res.setHeader('Content-Type', 'application/json; charset=utf-8')
   res.setHeader('X-Content-Type-Options', 'nosniff')
+  res.setHeader('Cache-Control', 'no-store')
   res.end(JSON.stringify(payload))
 }
 
 /**
- * Handles `/api/office/*` requests under Option A (Pure Read-Only Visual Command Center, #21).
- * All tmux write/injection (`reply`, `communicate`) and raw terminal scrollback (`output`) routes
- * are permanently disabled so AIM-Office carries zero command-execution or terminal-leakage risk;
- * authenticated E2EE, WebAuthn biometrics, TOTP, and spoken-summary TTS remain exclusively in AIM-Connect.
+ * Handles all `/api/*` requests under Option A (Pure Read-Only Visual Command Center, #21, #23, #25, #30).
+ * Enforces `isAllowedLocalReadRequest()` (`403 CROSS_ORIGIN_BLOCKED`) and `GET`-only `READ_ONLY_MODE` (`403`)
+ * across both `/api/office/*` and legacy `/api/fleet/*`, `/api/swarm/*`, `/api/forensics/*`, `/api/workspace/*`
+ * paths—never emitting `Access-Control-Allow-Origin: *`.
  */
 export async function handleOfficeBridgeRequest(
   req: IncomingMessage,
   res: ServerResponse
 ): Promise<boolean> {
   const rawUrl = req.url || ''
-  if (!rawUrl.startsWith('/api/office/')) {
+  if (rawUrl !== '/api' && !rawUrl.startsWith('/api/')) {
     return false
   }
 
@@ -1060,11 +1170,20 @@ export async function handleOfficeBridgeRequest(
     return true
   }
 
-  if (pathname === '/api/office/fleet') {
+  if (pathname === '/api/office/fleet' || pathname === '/api/fleet/panes') {
     const fleet = await fetchFleetFromAimConnect()
     sendJson(res, 200, {
       fleet,
       dispatches: [],
+      mode: 'read-only',
+    })
+    return true
+  }
+
+  if (pathname === '/api/office/swarm' || pathname === '/api/swarm/activity') {
+    const dispatches = await fetchSwarmActivityFromAimConnect()
+    sendJson(res, 200, {
+      dispatches,
       mode: 'read-only',
     })
     return true
@@ -1077,19 +1196,34 @@ export async function handleOfficeBridgeRequest(
     return true
   }
 
-  return false
+  sendJson(res, 404, {
+    error: `Read-only telemetry endpoint not found: ${pathname}`,
+    code: 'NOT_FOUND',
+  })
+  return true
+}
+
+function attachOfficeBridgeMiddleware(middlewares: {
+  use: (
+    fn: (req: IncomingMessage, res: ServerResponse, next: () => void) => void | Promise<void>
+  ) => unknown
+}): void {
+  middlewares.use(async (req, res, next) => {
+    const handled = await handleOfficeBridgeRequest(req, res)
+    if (!handled) {
+      next()
+    }
+  })
 }
 
 export function createOfficeBridgePlugin(): Plugin {
   return {
     name: 'aim-office-readonly-telemetry-bridge',
     configureServer(server) {
-      server.middlewares.use(async (req, res, next) => {
-        const handled = await handleOfficeBridgeRequest(req, res)
-        if (!handled) {
-          next()
-        }
-      })
+      attachOfficeBridgeMiddleware(server.middlewares)
+    },
+    configurePreviewServer(server) {
+      attachOfficeBridgeMiddleware(server.middlewares)
     },
   }
 }

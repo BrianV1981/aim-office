@@ -1,3 +1,6 @@
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import {
   AimConnectClient,
@@ -6,10 +9,13 @@ import {
   parseFleetPanesResponse,
 } from '../src/services/aimConnectClient'
 import {
+  createOfficeBridgePlugin,
   fetchFleetFromAimConnect,
+  fetchSwarmActivityFromAimConnect,
   handleOfficeBridgeRequest,
   isAllowedLocalReadRequest,
   parsePaneScrollbackTelemetry,
+  resolveAimLoopbackToken,
 } from '../src/server/officeBridge'
 import {
   applyCourierDispatchToCharacters,
@@ -310,7 +316,7 @@ describe('AIM-Connect Fleet Telemetry Bridge & Office Director (#2 & #5)', () =>
     expect(crossRes.statusCode).toBe(403)
     expect(crossRes.getJson().code).toBe('CROSS_ORIGIN_BLOCKED')
 
-    // 5. Allow local same-origin GET /api/office/fleet in read-only mode
+    // 5. Allow local same-origin GET /api/office/fleet in read-only mode (no wildcard CORS)
     const okRes = makeMockRes()
     await handleOfficeBridgeRequest(
       {
@@ -322,5 +328,103 @@ describe('AIM-Connect Fleet Telemetry Bridge & Office Director (#2 & #5)', () =>
     )
     expect(okRes.statusCode).toBe(200)
     expect(okRes.getJson().mode).toBe('read-only')
+    expect(okRes.headers['access-control-allow-origin']).toBeUndefined()
+
+    // 6. Enforce cross-origin & GET-only guards across legacy /api/fleet/* and /api/swarm/* routes (#23)
+    for (const route of ['/api/fleet/panes', '/api/swarm/activity', '/api/forensics/aim-office', '/api/workspace/context']) {
+      const evilRes = makeMockRes()
+      const handledEvil = await handleOfficeBridgeRequest(
+        {
+          method: 'GET',
+          url: route,
+          headers: { origin: 'https://evil.example', 'sec-fetch-site': 'cross-site' },
+        } as any,
+        evilRes
+      )
+      expect(handledEvil).toBe(true)
+      expect(evilRes.statusCode).toBe(403)
+      expect(evilRes.getJson().code).toBe('CROSS_ORIGIN_BLOCKED')
+      expect(evilRes.headers['access-control-allow-origin']).toBeUndefined()
+
+      const postRes = makeMockRes()
+      const handledPost = await handleOfficeBridgeRequest(
+        {
+          method: 'POST',
+          url: route,
+          headers: { origin: 'http://127.0.0.1:5175', 'sec-fetch-site': 'same-origin' },
+        } as any,
+        postRes
+      )
+      expect(handledPost).toBe(true)
+      expect(postRes.statusCode).toBe(403)
+      expect(postRes.getJson().code).toBe('READ_ONLY_MODE')
+    }
+  })
+
+  it('attaches X-AIM-Loopback-Token (#30) on aim-connect requests and wires configurePreviewServer (#25)', async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aim-office-loopback-'))
+    const tokFile = path.join(tmpDir, 'loopback.token')
+    fs.writeFileSync(tokFile, '  secret-host-loopback-token-30  \n', { mode: 0o600 })
+
+    expect(resolveAimLoopbackToken({ tokenPath: tokFile, envToken: '', bypassCache: true })).toBe(
+      'secret-host-loopback-token-30'
+    )
+    expect(
+      resolveAimLoopbackToken({ tokenPath: tokFile, envToken: 'env-override-token', bypassCache: true })
+    ).toBe('env-override-token')
+
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          fleet: [{ session_name: 'aim-office', vessel: 'agy', status: 'IDLE', context_pct: 8.2 }],
+        }),
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          dispatches: [
+            {
+              id: 'd-1',
+              filename: 'REPORT_30.md',
+              sender: 'aim-office',
+              recipient: 'aim-joshua',
+              reply_to: 'aim-office',
+              mtime: 1795000000,
+              preview: '[REPORT] Loopback token verified',
+            },
+          ],
+        }),
+      } as Response)
+
+    const fleet = await fetchFleetFromAimConnect('http://127.0.0.1:8000', true, 'tok-fleet-30')
+    expect(fleet).toHaveLength(1)
+    expect((fetchSpy.mock.calls[0]?.[1]?.headers as Record<string, string>)['X-AIM-Loopback-Token']).toBe(
+      'tok-fleet-30'
+    )
+
+    const swarm = await fetchSwarmActivityFromAimConnect(
+      'http://127.0.0.1:8000',
+      true,
+      'tok-swarm-30'
+    )
+    expect(swarm).toHaveLength(1)
+    expect(swarm[0].sender).toBe('aim-office')
+    expect((fetchSpy.mock.calls[1]?.[1]?.headers as Record<string, string>)['X-AIM-Loopback-Token']).toBe(
+      'tok-swarm-30'
+    )
+
+    fetchSpy.mockRestore()
+    fs.rmSync(tmpDir, { recursive: true, force: true })
+
+    // Verify both configureServer and configurePreviewServer attach the bridge middleware (#25)
+    const plugin = createOfficeBridgePlugin()
+    const devUse = vi.fn()
+    const previewUse = vi.fn()
+    ;(plugin.configureServer as any)({ middlewares: { use: devUse } })
+    ;(plugin.configurePreviewServer as any)({ middlewares: { use: previewUse } })
+    expect(devUse).toHaveBeenCalledTimes(1)
+    expect(previewUse).toHaveBeenCalledTimes(1)
   })
 })

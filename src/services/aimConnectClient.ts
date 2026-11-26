@@ -411,7 +411,10 @@ export class AimConnectClient {
       return DEMO_SWARM_DISPATCHES
     }
     try {
-      const resp = await fetch(this.url('/api/swarm/activity'), {
+      const endpoint = this.hasExplicitBaseUrl
+        ? this.url('/api/swarm/activity')
+        : '/api/office/swarm'
+      const resp = await fetch(endpoint, {
         headers: buildHeaders(this.apiToken),
       })
       if (!resp.ok) {
