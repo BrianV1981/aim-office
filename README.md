@@ -6,7 +6,7 @@
 
 **Sovereign Isometric 2.5D Pixel-Art Agent Command Center for the A.I.M. / J.O.S.H.U.A. Ecosystem**
 
-`aim-office` transforms your live multi-agent `tmux` fleet into an interactive, isometric 2.5D pixel-art command center. Watch autonomous coding vessels (`AGY`, `Grok`, `OpenCode`, `Codex`, `Auditor`) work at their desks, walk `aim-communicate` dispatches across the floor, lounge around smart break-room furniture when idle, update per-project GitHub Kanban whiteboards, and surface live **30%-Rule Context Window** telemetry—while keeping all privileged command execution safely isolated inside **[aim-connect](https://github.com/BrianV1981/aim-connect)**.
+`aim-office` transforms your live multi-agent `tmux` fleet into an interactive, isometric 2.5D pixel-art command center. Watch autonomous coding vessels (`AGY`, `Grok`, `OpenCode`, `Codex`, `Auditor`) work at their desks, walk A-Mail (`amail` / `aim-mail`) dispatches across the floor, lounge around smart break-room furniture when idle, update per-project GitHub Kanban whiteboards, and surface live **30%-Rule Context Window** telemetry—while keeping all privileged command execution safely isolated inside **[aim-connect](https://github.com/BrianV1981/aim-connect)**.
 
 ---
 
@@ -22,7 +22,7 @@
 - **Elastic 11-to-32 Workstation Lattice & Camera Controls:** Dynamically scales up to 8 parallel 2x2 quad benches (`32` workstations) with smooth mouse-wheel zoom (`0.75x – 1.8x`), drag-to-pan camera, and RTS squad quick-select hotbar (`1`–`8`).
 - **20-Persona Sovereign Roster (`80` Original Sprites):** Ships with 20 clean-sheet, 4-direction (`front-left`, `front-right`, `rear-left`, `rear-right`) pixel-art character personas and a searchable, filterable left-docked **Staff & Fleet Roster**.
 - **Interactive Build Mode & Sims-Style Idle Hangouts:** Toggle `🛠️ BUILD` to drag-and-drop desks or place items from the 6-piece **Smart Furniture Catalog** (`☕ Coffee Bar`, `🛋️ Lounge Sofa`, `🚬 Smoke Stand`, `💨 Cyber-Vape Pod`, `💧 Water Cooler`, `🕹️ Arcade Cab`) with per-theme `localStorage` persistence. With `☕ BREAKS ON`, `IDLE` agents gather at hangout spots (including 4-angle seated sofa postures and SVG prop overlays) and sprint back to their workstations the instant they resume work.
-- **Physical `aim-communicate` Courier Walks & Per-Project Kanban:** Animates agents walking dispatches along BFS corridor waypoints between cubicles and `aim-joshua`'s Boss Desk, and resolves live GitHub Projects V2 / `HANDOFF.md` Kanban columns per selected agent.
+- **Physical A-Mail Courier Walks & Per-Project Kanban:** Animates agents walking dispatches along BFS corridor waypoints between cubicles and `aim-joshua`'s Boss Desk, and resolves live GitHub Projects V2 / `HANDOFF.md` Kanban columns per selected agent.
 - **Zero-Execution Security Boundary (`Option A`):** `aim-office` runs strictly as a **Read-Only Visualizer** bound to `127.0.0.1:5175`. All `tmux` prompt injection and raw terminal scrollback scraping are disabled at the server layer (`HTTP 403 READ_ONLY_MODE`); clicking **Command in AIM-Connect** deep-links directly into `aim-connect` where E2EE encryption, WebAuthn biometrics, TOTP, and `🔊` spoken-summary audio reside. See [SECURITY.md](SECURITY.md).
 
 ---
