@@ -54,6 +54,7 @@ Open **`http://127.0.0.1:5175`** in your browser.
 | Variable | Default | Description |
 | :--- | :--- | :--- |
 | `VITE_AIM_CONNECT_URL` | `http://localhost:8000` | Base URL for `aim-connect` telemetry proxy and Inspector deep-links. |
+| `AIM_LOOPBACK_TOKEN` | *(auto-read from `~/aim-connect/backend/loopback.token`)* | Optional host-only `X-AIM-Loopback-Token` override for `aim-connect` local telemetry (`#30`). |
 | `VITE_AIM_API_TOKEN` | *(empty)* | Optional read token forwarded as `x-api-token` to `aim-connect`. |
 | `AIM_PROJECT_MAP_JSON` | *(empty)* | Optional JSON map (`{"my-session": 12}`) overriding default session-to-GitHub-Project numbers when `<repo>/joshua_os/.aim_core/CONFIG.json` is absent. |
 
@@ -73,10 +74,12 @@ All 80 directional character sprites in `public/sprites/characters/` are 100% or
 
 ```bash
 python3 scripts/slice_sprite_sheet.py \
-  --input raw_sheet.png \
-  --output-dir public/sprites/characters \
-  --slug agent-custom
+  raw_sheet.png \
+  agent-custom \
+  --output-dir public/sprites/characters
 ```
+
+*(Flag aliases `--input raw_sheet.png` and `--slug agent-custom` are also supported.)*
 
 ---
 

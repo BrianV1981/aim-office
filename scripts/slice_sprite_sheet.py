@@ -157,8 +157,30 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Slice a 2x2 isometric character sprite sheet into 4 directional PNGs."
     )
-    parser.add_argument("input_image", help="Path to the input 2x2 sprite sheet PNG/JPG")
-    parser.add_argument("archetype_slug", help="Archetype slug (e.g., boss-joshua, vessel-agy)")
+    parser.add_argument(
+        "input_image",
+        nargs="?",
+        help="Path to the input 2x2 sprite sheet PNG/JPG",
+    )
+    parser.add_argument(
+        "archetype_slug",
+        nargs="?",
+        help="Archetype slug (e.g., boss-joshua, vessel-agy)",
+    )
+    parser.add_argument(
+        "--input",
+        "-i",
+        dest="input_flag",
+        default=None,
+        help="Optional flag alias for input_image",
+    )
+    parser.add_argument(
+        "--slug",
+        "-s",
+        dest="slug_flag",
+        default=None,
+        help="Optional flag alias for archetype_slug",
+    )
     parser.add_argument(
         "--output-dir",
         "-o",
@@ -174,9 +196,22 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main() -> int:
+def parse_cli_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = build_parser()
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
+    resolved_input = args.input_flag or args.input_image
+    resolved_slug = args.slug_flag or args.archetype_slug
+    if not resolved_input or not resolved_slug:
+        parser.error(
+            "Both input_image (or --input) and archetype_slug (or --slug) are required."
+        )
+    args.input_image = resolved_input
+    args.archetype_slug = resolved_slug
+    return args
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = parse_cli_args(argv)
     outputs = slice_sprite_sheet(
         input_path=args.input_image,
         archetype_slug=args.archetype_slug,

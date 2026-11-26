@@ -232,7 +232,7 @@ export const AgentInspectorDrawer: React.FC<AgentInspectorDrawerProps> = ({
           </div>
           <div
             className="inspector-context-bar-track"
-            title="30%-Rule Recall Envelope: green < 22%, amber 22-29%, red >= 30%"
+            title="30%-Rule Recall Envelope: green < 20%, amber 20-29%, red >= 30%"
           >
             <div
               className={`inspector-context-bar-fill severity-${character.context.severity}`}

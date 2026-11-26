@@ -3,7 +3,7 @@
 from pathlib import Path
 from PIL import Image, ImageDraw
 
-from scripts.slice_sprite_sheet import DIRECTIONS, slice_sprite_sheet
+from scripts.slice_sprite_sheet import DIRECTIONS, parse_cli_args, slice_sprite_sheet
 
 
 def _create_synthetic_2x2_sheet(path: Path, bg_color=(255, 255, 255, 255)) -> Path:
@@ -66,6 +66,34 @@ def test_slice_2x2_magenta_key_transparency(tmp_path: Path) -> None:
         assert out_file.name == f"boss-joshua-{direction}.png"
         with Image.open(out_file) as sprite:
             assert sprite.mode == "RGBA"
-            # Verify no magenta pixels remain
-            for pixel in sprite.getdata():
+            # Verify no magenta pixels remain (Pillow 14+ get_flattened_data compatible, #29)
+            pixels = (
+                sprite.get_flattened_data()
+                if hasattr(sprite, "get_flattened_data")
+                else sprite.getdata()
+            )
+            for pixel in pixels:
                 assert pixel != (255, 0, 255, 255)
+
+
+def test_cli_supports_positional_and_flag_arguments() -> None:
+    pos_args = parse_cli_args(
+        ["raw_sheet.png", "agent-custom", "--output-dir", "public/sprites/characters"]
+    )
+    assert pos_args.input_image == "raw_sheet.png"
+    assert pos_args.archetype_slug == "agent-custom"
+    assert pos_args.output_dir == "public/sprites/characters"
+
+    flag_args = parse_cli_args(
+        [
+            "--input",
+            "raw_sheet.png",
+            "--output-dir",
+            "public/sprites/characters",
+            "--slug",
+            "agent-custom",
+        ]
+    )
+    assert flag_args.input_image == "raw_sheet.png"
+    assert flag_args.archetype_slug == "agent-custom"
+    assert flag_args.output_dir == "public/sprites/characters"
