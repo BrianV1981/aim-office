@@ -10,12 +10,17 @@ import {
 } from '../src/services/aimConnectClient'
 import {
   createOfficeBridgePlugin,
+  extractWikiLogDeltaFromMarkdown,
   fetchFleetFromAimConnect,
+  fetchSessionForensicsLocal,
   fetchSwarmActivityFromAimConnect,
+  fetchWorkspaceContextLocal,
   handleOfficeBridgeRequest,
   isAllowedLocalReadRequest,
+  parseHandoffKanbanForSession,
   parsePaneScrollbackTelemetry,
   resolveAimLoopbackToken,
+  resolveMappedProjectNumber,
 } from '../src/server/officeBridge'
 import {
   applyCourierDispatchToCharacters,
@@ -426,5 +431,120 @@ describe('AIM-Connect Fleet Telemetry Bridge & Office Director (#2 & #5)', () =>
     ;(plugin.configurePreviewServer as any)({ middlewares: { use: previewUse } })
     expect(devUse).toHaveBeenCalledTimes(1)
     expect(previewUse).toHaveBeenCalledTimes(1)
+  })
+
+  it('serves honest read-only local forensics & workspace context (#24) without fabricating Demo data on HTTP 401', async () => {
+    const tmpRepo = fs.mkdtempSync(path.join(os.tmpdir(), 'aim-office-ws-24-'))
+    fs.mkdirSync(path.join(tmpRepo, 'memory-wiki'), { recursive: true })
+    fs.writeFileSync(path.join(tmpRepo, 'AGENTS.md'), '# Agents\n')
+    fs.writeFileSync(
+      path.join(tmpRepo, 'memory-wiki', 'log.md'),
+      [
+        '# Engineering Log',
+        '## [2026-11-20] Initial Telemetry Baseline (#10)',
+        '- **Ticket `#10` (`Done`):** Calibrated War Room desk pods.',
+        '## [2026-11-25] Loopback Security Hardening (#24)',
+      ].join('\n')
+    )
+
+    const transcriptFile = path.join(tmpRepo, 'transcript.jsonl')
+    fs.writeFileSync(
+      transcriptFile,
+      [
+        JSON.stringify({
+          type: 'PLANNER_RESPONSE',
+          created_at: '2026-11-25T20:00:00Z',
+          tool_calls: [
+            { name: 'read_file', args: { Path: '/tmp/repo/src/server/officeBridge.ts' } },
+            {
+              name: 'run_command',
+              args: { CommandLine: 'SECRET=xyz npm test', toolSummary: 'Execute unit tests' },
+            },
+          ],
+        }),
+      ].join('\n') + '\n'
+    )
+
+    const localForensics = fetchSessionForensicsLocal('aim-office', {
+      sessionPathOverride: tmpRepo,
+      transcriptPathOverride: transcriptFile,
+      bypassCache: true,
+    })
+    expect(localForensics.tool_call_count).toBe(2)
+    expect(localForensics.recent_tool_pills[0]).toMatchObject({
+      name: 'run_command',
+      summary: 'Execute unit tests',
+    })
+    expect(JSON.stringify(localForensics)).not.toContain('SECRET=xyz')
+    expect(localForensics.recent_tool_pills[1]).toMatchObject({
+      name: 'read_file',
+      summary: 'officeBridge.ts',
+    })
+
+    const localWs = fetchWorkspaceContextLocal('aim-office', {
+      sessionPathOverride: tmpRepo,
+      bypassCache: true,
+    })
+    expect(localWs.wiki_log_delta[0]).toContain('[2026-11-25] Loopback Security Hardening (#24)')
+    expect(extractWikiLogDeltaFromMarkdown('')).toEqual([])
+
+    // Verify AimConnectClient returns honest empty state (NOT fabricated 4-EXEC Demo data) when forceDemo=false & 401
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue({ ok: false, status: 401 } as Response)
+    const liveClient = new AimConnectClient({ baseUrl: 'http://127.0.0.1:8000' })
+
+    const failedForensics = await liveClient.fetchSessionForensics('aim-office', false)
+    expect(failedForensics.toolCallCount).toBe(0)
+    expect(failedForensics.recentToolPills).toEqual([])
+
+    const failedWs = await liveClient.fetchWorkspaceContext('aim-office', false)
+    expect(failedWs.wikiLogDelta).toEqual([])
+
+    // Demo mode still returns deterministic Demo fixtures when explicitly requested
+    const demoForensics = await liveClient.fetchSessionForensics('aim-office', true)
+    expect(demoForensics.toolCallCount).toBe(4)
+
+    fetchSpy.mockRestore()
+    fs.rmSync(tmpRepo, { recursive: true, force: true })
+  })
+
+  it('fixes template CONFIG.json #7 precedence, >14 project numbers, and HANDOFF.md sub-bullet parsing (#27)', () => {
+    // 1. Template CONFIG.json with number=7 and empty repo must NOT override SESSION_PROJECT_MAP ('aim-auditor' -> 22)
+    expect(resolveMappedProjectNumber('aim-auditor', '/tmp/aim-auditor', 7, '')).toBe(22)
+    expect(resolveMappedProjectNumber('aim-ops', '/tmp/aim-ops', 7, '')).toBe(15)
+    // Explicit matching repo in CONFIG.json or aim-joshua itself DOES honor configuredNumber
+    expect(resolveMappedProjectNumber('aim-joshua', '/tmp/aim-joshua', 7, '')).toBe(7)
+    expect(
+      resolveMappedProjectNumber('custom-agent', '/tmp/custom-agent', 29, 'BrianV1981/custom-agent')
+    ).toBe(29)
+
+    // 2. Indented metadata sub-bullets & Status/Action/Key files prefixes must NOT become Kanban cards
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aim-office-handoff-27-'))
+    fs.writeFileSync(
+      path.join(tmpDir, 'HANDOFF.md'),
+      [
+        '# Agent Handoff',
+        '## 2. YOUR MISSION',
+        '- Ship Kanban parser fix (#27)',
+        '  - Status: In Progress',
+        '  - Action: Edit officeBridge.ts',
+        '  - Key files: src/server/officeBridge.ts',
+        '- Problem: Metadata lines leaked into cards',
+        '## 9. IMMEDIATE NEXT STEPS',
+        '1. Verify Vitest suite passes (#29)',
+        '   - Files: tests/aimConnectTelemetry.test.tsx',
+      ].join('\n')
+    )
+
+    const tickets = parseHandoffKanbanForSession(tmpDir, 'aim-office')
+    const titles = tickets.map((t) => t.title)
+    expect(titles.some((t) => t.includes('Ship Kanban parser fix (#27)'))).toBe(true)
+    expect(titles.some((t) => t.includes('Verify Vitest suite passes (#29)'))).toBe(true)
+    expect(titles.some((t) => /^Status:|^Action:|^Key files:|^Problem:|^Files:/i.test(t))).toBe(
+      false
+    )
+
+    fs.rmSync(tmpDir, { recursive: true, force: true })
   })
 })

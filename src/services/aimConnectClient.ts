@@ -558,38 +558,61 @@ export class AimConnectClient {
   ): Promise<SessionForensicsPayload> {
     if (!forceDemo) {
       try {
-        const resp = await fetch(
-          this.url(`/api/forensics/${encodeURIComponent(sessionName)}`),
-          { headers: buildHeaders(this.apiToken) }
-        )
+        const endpoint = this.hasExplicitBaseUrl
+          ? this.url(`/api/forensics/${encodeURIComponent(sessionName)}`)
+          : `/api/office/forensics?session=${encodeURIComponent(sessionName)}`
+        const resp = await fetch(endpoint, { headers: buildHeaders(this.apiToken) })
         if (resp.ok) {
           const json = (await resp.json()) as Record<string, unknown>
-          const turns = Array.isArray(json.turns) ? json.turns : []
           const pills: ForensicToolCall[] = []
-          for (const turn of turns) {
-            if (!turn || typeof turn !== 'object') continue
-            const tObj = turn as Record<string, unknown>
-            const toolCalls = Array.isArray(tObj.tool_calls) ? tObj.tool_calls : []
-            for (const tc of toolCalls) {
-              if (!tc || typeof tc !== 'object') continue
-              const tcObj = tc as Record<string, unknown>
+
+          if (Array.isArray(json.recent_tool_pills)) {
+            for (const p of json.recent_tool_pills) {
+              if (!p || typeof p !== 'object') continue
+              const pObj = p as Record<string, unknown>
               pills.push({
-                name: String(tcObj.name ?? 'Tool'),
-                summary: String(tcObj.summary ?? tcObj.args_preview ?? ''),
-                timestamp: typeof tObj.timestamp === 'string' ? tObj.timestamp : undefined,
+                name: String(pObj.name ?? 'Tool'),
+                summary: String(pObj.summary ?? ''),
+                timestamp: typeof pObj.timestamp === 'string' ? pObj.timestamp : undefined,
               })
             }
+          } else if (Array.isArray(json.turns)) {
+            for (const turn of json.turns) {
+              if (!turn || typeof turn !== 'object') continue
+              const tObj = turn as Record<string, unknown>
+              const toolCalls = Array.isArray(tObj.tool_calls) ? tObj.tool_calls : []
+              for (const tc of toolCalls) {
+                if (!tc || typeof tc !== 'object') continue
+                const tcObj = tc as Record<string, unknown>
+                pills.push({
+                  name: String(tcObj.name ?? 'Tool'),
+                  summary: String(tcObj.summary ?? tcObj.args_preview ?? ''),
+                  timestamp: typeof tObj.timestamp === 'string' ? tObj.timestamp : undefined,
+                })
+              }
+            }
+            pills.splice(0, Math.max(0, pills.length - 8))
+            pills.reverse()
           }
+
           return {
             session: sessionName,
             panePath: String(json.pane_path ?? `~/${sessionName}`),
-            source: String(json.source ?? `tmux:${sessionName}`),
+            source: String(json.source ?? `local:${sessionName}`),
             toolCallCount: Number(json.tool_call_count ?? pills.length),
-            recentToolPills: pills.slice(-8).reverse(),
+            recentToolPills: pills.slice(0, 8),
           }
         }
       } catch {
-        // Fall through to deterministic demo forensics
+        // Honest empty state below when live telemetry fails (#24)
+      }
+
+      return {
+        session: sessionName,
+        panePath: `~/${sessionName}`,
+        source: `unavailable:${sessionName}`,
+        toolCallCount: 0,
+        recentToolPills: [],
       }
     }
 
@@ -613,10 +636,10 @@ export class AimConnectClient {
   ): Promise<WorkspaceContextPayload> {
     if (!forceDemo) {
       try {
-        const resp = await fetch(
-          this.url(`/api/workspace/context?session=${encodeURIComponent(sessionName)}`),
-          { headers: buildHeaders(this.apiToken) }
-        )
+        const endpoint = this.hasExplicitBaseUrl
+          ? this.url(`/api/workspace/context?session=${encodeURIComponent(sessionName)}`)
+          : `/api/office/workspace?session=${encodeURIComponent(sessionName)}`
+        const resp = await fetch(endpoint, { headers: buildHeaders(this.apiToken) })
         if (resp.ok) {
           const json = (await resp.json()) as Record<string, unknown>
           const brainFiles = Array.isArray(json.brain_files)
@@ -635,22 +658,35 @@ export class AimConnectClient {
                 branch: String(wt.branch ?? ''),
               }))
             : []
+          const wikiLogDelta = Array.isArray(json.wiki_log_delta)
+            ? (json.wiki_log_delta as unknown[])
+                .map((item) => String(item ?? '').trim())
+                .filter(Boolean)
+            : []
           return {
             session: sessionName,
             panePath: String(json.pane_path ?? `~/${sessionName}`),
             repoRoot: String(json.repo_root ?? `~/${sessionName}`),
             mainRepoRoot: String(json.main_repo_root ?? `~/${sessionName}`),
             branch: String(json.branch ?? 'main'),
-            wikiLogDelta: [
-              `[2026-10-26] Active telemetry sync for ${sessionName}`,
-              `[2026-10-26] Verified 30%-Rule Context Guard & Memory Wiki state`,
-            ],
+            wikiLogDelta,
             brainFiles,
             worktrees,
           }
         }
       } catch {
-        // Fall through to demo workspace context
+        // Honest empty state below when live telemetry fails (#24)
+      }
+
+      return {
+        session: sessionName,
+        panePath: `~/${sessionName}`,
+        repoRoot: `~/${sessionName}`,
+        mainRepoRoot: `~/${sessionName}`,
+        branch: 'main',
+        wikiLogDelta: [],
+        brainFiles: [],
+        worktrees: [],
       }
     }
 

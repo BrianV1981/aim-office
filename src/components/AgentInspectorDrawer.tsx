@@ -332,13 +332,19 @@ export const AgentInspectorDrawer: React.FC<AgentInspectorDrawerProps> = ({
 
             <div className="wiki-delta-box" data-testid="inspector-wiki-delta">
               <div className="meta-key">Recent memory-wiki/log.md Delta:</div>
-              <ul>
-                {(workspaceCtx?.wikiLogDelta ?? [
-                  `[2026-10-26] Active telemetry sync for ${character.sessionName}`,
-                ]).map((entry, idx) => (
-                  <li key={idx}>{entry}</li>
-                ))}
-              </ul>
+              {workspaceCtx?.wikiLogDelta && workspaceCtx.wikiLogDelta.length > 0 ? (
+                <ul>
+                  {workspaceCtx.wikiLogDelta.map((entry, idx) => (
+                    <li key={idx}>{entry}</li>
+                  ))}
+                </ul>
+              ) : (
+                <div className="forensic-empty">
+                  {loading
+                    ? 'Loading memory-wiki/log.md delta...'
+                    : 'No memory-wiki/log.md entries recorded yet.'}
+                </div>
+              )}
             </div>
           </section>
         </div>

@@ -123,24 +123,57 @@ const KANBAN_CACHE_TTL_MS = 60_000
 export function resolveMappedProjectNumber(
   sessionName: string,
   cwdPath: string,
-  configuredNumber: number | null
+  configuredNumber: number | null,
+  configuredRepo = ''
 ): number {
-  if (typeof configuredNumber === 'number' && configuredNumber > 0) {
+  const cleanSession = (sessionName || '').trim().toLowerCase()
+  const mainRoot = resolveMainRepoRoot(cwdPath)
+  const repoBase = path.basename(mainRoot || cwdPath).toLowerCase()
+  const parentBase = path.basename(path.dirname(mainRoot || cwdPath)).toLowerCase()
+
+  const envMap = loadCustomProjectMapFromEnv()
+  if (envMap[cleanSession]) {
+    return envMap[cleanSession]
+  }
+  if (envMap[repoBase]) {
+    return envMap[repoBase]
+  }
+
+  const cleanConfiguredRepo = (configuredRepo || '').trim().toLowerCase()
+  const configuredRepoBase = cleanConfiguredRepo.includes('/')
+    ? cleanConfiguredRepo.split('/').pop() || ''
+    : cleanConfiguredRepo
+  const hasExplicitMatchingRepo =
+    Boolean(configuredRepoBase) &&
+    (configuredRepoBase === repoBase || configuredRepoBase === cleanSession)
+
+  if (
+    typeof configuredNumber === 'number' &&
+    configuredNumber > 0 &&
+    (hasExplicitMatchingRepo || cleanSession === 'aim-joshua')
+  ) {
     return configuredNumber
   }
-  const cleanSession = (sessionName || '').trim().toLowerCase()
+
   if (SESSION_PROJECT_MAP[cleanSession]) {
     return SESSION_PROJECT_MAP[cleanSession]
   }
-  const mainRoot = resolveMainRepoRoot(cwdPath)
-  const repoBase = path.basename(mainRoot || cwdPath).toLowerCase()
   if (SESSION_PROJECT_MAP[repoBase]) {
     return SESSION_PROJECT_MAP[repoBase]
   }
-  const parentBase = path.basename(path.dirname(mainRoot || cwdPath)).toLowerCase()
   if (SESSION_PROJECT_MAP[parentBase]) {
     return SESSION_PROJECT_MAP[parentBase]
   }
+
+  // Only honor unverified configuredNumber when it is not the default template #7 with empty repo (#27)
+  if (
+    typeof configuredNumber === 'number' &&
+    configuredNumber > 0 &&
+    (configuredNumber !== 7 || Boolean(cleanConfiguredRepo))
+  ) {
+    return configuredNumber
+  }
+
   if (cleanSession.includes('connect') || cleanSession.startsWith('agent-op_')) {
     return 6
   }
@@ -175,10 +208,11 @@ export function readRepoProjectConfig(cwdPath: string, sessionName = ''): {
         const gp = raw?.settings?.github_projects
         if (gp && typeof gp === 'object') {
           const cfgNum = typeof gp.number === 'number' ? gp.number : null
+          const cfgRepo = typeof gp.repo === 'string' ? gp.repo : ''
           const resolved = {
-            projectNumber: resolveMappedProjectNumber(sessionName, cwdPath, cfgNum),
+            projectNumber: resolveMappedProjectNumber(sessionName, cwdPath, cfgNum, cfgRepo),
             owner: typeof gp.owner === 'string' ? gp.owner : 'BrianV1981',
-            repo: typeof gp.repo === 'string' ? gp.repo : '',
+            repo: cfgRepo,
           }
           repoProjectConfigCache.set(cacheKey, resolved)
           return resolved
@@ -778,6 +812,9 @@ function cleanMarkdownText(raw: string): string {
     .trim()
 }
 
+const HANDOFF_METADATA_PREFIX_RE =
+  /^(?:status|action|key\s*files?|files?|problem|fix|context|root\s*cause|verification|evidence|impact|owner|updated(?:\s+by)?|branch|commit)\s*:/i
+
 export function parseHandoffKanbanForSession(
   sessionPath: string,
   sessionName: string
@@ -821,6 +858,7 @@ export function parseHandoffKanbanForSession(
   let currentSection = ''
   let seqNum = 100
   for (const rawLine of text.split('\n')) {
+    const isIndented = /^[ \t]{2,}/.test(rawLine)
     const line = rawLine.trim()
     if (!line) continue
 
@@ -874,11 +912,11 @@ export function parseHandoffKanbanForSession(
       continue
     }
 
-    // Bullet/numbered items under completed / tactical summary / milestones
-    const bulletMatch = line.match(/^(?:-\s+|\*\s+|\d+\.\s+)(.+)/)
+    // Top-level bullet/numbered items only (skip indented metadata sub-bullets, #27)
+    const bulletMatch = !isIndented ? line.match(/^(?:-\s+|\*\s+|\d+\.\s+)(.+)/) : null
     if (bulletMatch?.[1]) {
       const itemText = cleanMarkdownText(bulletMatch[1])
-      if (!itemText) continue
+      if (!itemText || HANDOFF_METADATA_PREFIX_RE.test(itemText)) continue
       const numMatch = itemText.match(/#(\d+)/)
       const num = numMatch ? Number(numMatch[1]) : ++seqNum
 
@@ -955,8 +993,8 @@ export function fetchProjectKanbanForSession(sessionName: string): {
   const handoffTickets = parseHandoffKanbanForSession(sessionPath, targetSession)
   let ghTickets: LocalKanbanTicket[] = []
 
-  // Only query `gh project item-list` for real GitHub Project V2 boards (1..14)
-  if (effectiveNumber >= 1 && effectiveNumber <= 14) {
+  // Query `gh project item-list` across all GitHub Project V2 boards (#27: removed <=14 cap)
+  if (effectiveNumber >= 1) {
     const ghJson = runCmd(
       'gh',
       [
@@ -1102,6 +1140,293 @@ export async function fetchSwarmActivityFromAimConnect(
   return []
 }
 
+export interface LocalForensicsPill {
+  name: string
+  summary: string
+  timestamp?: string
+}
+
+export interface LocalSessionForensicsResult {
+  session: string
+  pane_path: string
+  source: string
+  tool_call_count: number
+  recent_tool_pills: LocalForensicsPill[]
+}
+
+export interface LocalWorkspaceContextResult {
+  session: string
+  pane_path: string
+  repo_root: string
+  main_repo_root: string
+  branch: string
+  wiki_log_delta: string[]
+  brain_files: Array<{
+    label: string
+    category: string
+    path: string
+    exists: boolean
+    mtime: number | null
+  }>
+  worktrees: Array<{
+    name: string
+    path: string
+    branch: string
+  }>
+}
+
+const forensicsSessionCache = new Map<string, { ts: number; data: LocalSessionForensicsResult }>()
+const workspaceContextCache = new Map<string, { ts: number; data: LocalWorkspaceContextResult }>()
+const INSPECTOR_LOCAL_CACHE_TTL_MS = 4_000
+
+function stripSurroundingQuotes(val: string): string {
+  const trimmed = (val || '').trim()
+  if (
+    (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+    (trimmed.startsWith("'") && trimmed.endsWith("'"))
+  ) {
+    return trimmed.slice(1, -1).trim()
+  }
+  return trimmed
+}
+
+export function summarizeTranscriptToolCall(tcObj: Record<string, unknown>): LocalForensicsPill {
+  const rawName = String(tcObj.name ?? 'Tool').trim() || 'Tool'
+  const args =
+    tcObj.args && typeof tcObj.args === 'object' ? (tcObj.args as Record<string, unknown>) : {}
+
+  const explicitSummary = stripSurroundingQuotes(
+    String(args.toolSummary ?? tcObj.summary ?? '').trim()
+  )
+  if (explicitSummary) {
+    return { name: rawName, summary: explicitSummary.slice(0, 76) }
+  }
+
+  const filePathArg = stripSurroundingQuotes(String(args.Path ?? args.path ?? '').trim())
+  if (filePathArg) {
+    return { name: rawName, summary: path.basename(filePathArg).slice(0, 76) }
+  }
+
+  return { name: rawName, summary: rawName }
+}
+
+/**
+ * Read-only local transcript tool-call metadata (#24):
+ * Extracts recent tool call names and safe summaries from structured AGY `transcript.jsonl`
+ * without ever capturing or exposing raw terminal scrollback or command arguments.
+ */
+export function fetchSessionForensicsLocal(
+  sessionName: string,
+  options?: { sessionPathOverride?: string; transcriptPathOverride?: string; bypassCache?: boolean }
+): LocalSessionForensicsResult {
+  const targetSession = (sessionName || 'aim-office').trim()
+  const now = Date.now()
+  if (!options?.bypassCache && !options?.transcriptPathOverride) {
+    const cached = forensicsSessionCache.get(targetSession)
+    if (cached && now - cached.ts < INSPECTOR_LOCAL_CACHE_TTL_MS) {
+      return cached.data
+    }
+  }
+
+  const sessionPath = options?.sessionPathOverride || resolveSessionPath(targetSession)
+  const mainRoot = resolveMainRepoRoot(sessionPath)
+  const repoName = path.basename(mainRoot || sessionPath)
+
+  let transcriptPath = options?.transcriptPathOverride || ''
+  let sourceLabel = `local:${targetSession}`
+
+  if (!transcriptPath) {
+    const brainMap = resolveAgyBrainContextMap()
+    const snap =
+      brainMap.byPath.get(mainRoot) ??
+      brainMap.byAlias.get(targetSession.toLowerCase()) ??
+      brainMap.byAlias.get(repoName.toLowerCase())
+
+    if (snap?.conversation_id) {
+      sourceLabel = `transcript:${snap.conversation_id.slice(0, 8)}`
+      transcriptPath = path.join(
+        USER_HOME_DIR,
+        '.gemini',
+        'antigravity-cli',
+        'brain',
+        snap.conversation_id,
+        '.system_generated',
+        'logs',
+        'transcript.jsonl'
+      )
+    }
+  }
+
+  const pills: LocalForensicsPill[] = []
+  let totalCount = 0
+
+  if (transcriptPath && fs.existsSync(transcriptPath)) {
+    try {
+      const stat = fs.statSync(transcriptPath)
+      const fd = fs.openSync(transcriptPath, 'r')
+      try {
+        const readSize = Math.min(stat.size, 131_072)
+        const buf = Buffer.alloc(readSize)
+        fs.readSync(fd, buf, 0, readSize, Math.max(0, stat.size - readSize))
+        const tailText = buf.toString('utf-8')
+        for (const line of tailText.split('\n')) {
+          if (!line.includes('"tool_calls"')) continue
+          try {
+            const parsed = JSON.parse(line) as Record<string, unknown>
+            const tcs = Array.isArray(parsed.tool_calls) ? parsed.tool_calls : []
+            const ts = typeof parsed.created_at === 'string' ? parsed.created_at : undefined
+            for (const tc of tcs) {
+              if (!tc || typeof tc !== 'object') continue
+              totalCount += 1
+              const pill = summarizeTranscriptToolCall(tc as Record<string, unknown>)
+              pills.push(ts ? { ...pill, timestamp: ts } : pill)
+            }
+          } catch {
+            // Ignore partial head line on byte-seek boundary
+          }
+        }
+      } finally {
+        fs.closeSync(fd)
+      }
+    } catch {
+      // Ignore unreadable transcript
+    }
+  }
+
+  const result: LocalSessionForensicsResult = {
+    session: targetSession,
+    pane_path: sessionPath,
+    source: sourceLabel,
+    tool_call_count: totalCount,
+    recent_tool_pills: pills.slice(-8).reverse(),
+  }
+
+  if (!options?.transcriptPathOverride) {
+    forensicsSessionCache.set(targetSession, { ts: now, data: result })
+  }
+  return result
+}
+
+export function extractWikiLogDeltaFromMarkdown(markdown: string, limit = 4): string[] {
+  const entries: string[] = []
+  for (const rawLine of (markdown || '').split('\n')) {
+    const trimmed = rawLine.trim()
+    if (trimmed.startsWith('## ')) {
+      const heading = cleanMarkdownText(trimmed.replace(/^##\s+/, '')).slice(0, 110)
+      if (heading) entries.push(heading)
+    } else if (trimmed.startsWith('- **Ticket') || trimmed.startsWith('- **Workspace')) {
+      const bullet = cleanMarkdownText(trimmed.replace(/^-\s+/, '')).slice(0, 110)
+      if (bullet) entries.push(bullet)
+    }
+  }
+  return entries.slice(-limit).reverse()
+}
+
+/**
+ * Read-only local workspace context & Memory Wiki delta (#24):
+ * Resolves active Git branch, worktrees, Brain file presence, and real `memory-wiki/log.md` entries.
+ */
+export function fetchWorkspaceContextLocal(
+  sessionName: string,
+  options?: { sessionPathOverride?: string; bypassCache?: boolean }
+): LocalWorkspaceContextResult {
+  const targetSession = (sessionName || 'aim-office').trim()
+  const now = Date.now()
+  if (!options?.bypassCache && !options?.sessionPathOverride) {
+    const cached = workspaceContextCache.get(targetSession)
+    if (cached && now - cached.ts < INSPECTOR_LOCAL_CACHE_TTL_MS) {
+      return cached.data
+    }
+  }
+
+  const sessionPath = options?.sessionPathOverride || resolveSessionPath(targetSession)
+  const mainRoot = resolveMainRepoRoot(sessionPath)
+  const branch = readGitBranchFast(sessionPath)
+
+  const brainSpecs = [
+    { label: 'AGENTS.md', category: 'agents', rel: 'AGENTS.md' },
+    { label: 'HANDOFF.md', category: 'handoff', rel: 'HANDOFF.md' },
+    { label: 'wiki/index.md', category: 'wiki', rel: path.join('memory-wiki', 'index.md') },
+    { label: 'wiki/log.md', category: 'wiki', rel: path.join('memory-wiki', 'log.md') },
+  ]
+  const brainFiles = brainSpecs.map((spec) => {
+    const full = path.join(mainRoot, spec.rel)
+    try {
+      if (fs.existsSync(full)) {
+        const st = fs.statSync(full)
+        return {
+          label: spec.label,
+          category: spec.category,
+          path: full,
+          exists: true,
+          mtime: Math.floor(st.mtimeMs / 1000),
+        }
+      }
+    } catch {
+      // Ignore stat error
+    }
+    return {
+      label: spec.label,
+      category: spec.category,
+      path: full,
+      exists: false,
+      mtime: null,
+    }
+  })
+
+  let wikiLogDelta: string[] = []
+  const wikiLogPath = path.join(mainRoot, 'memory-wiki', 'log.md')
+  if (fs.existsSync(wikiLogPath)) {
+    try {
+      const rawWiki = fs.readFileSync(wikiLogPath, 'utf-8')
+      wikiLogDelta = extractWikiLogDeltaFromMarkdown(rawWiki, 4)
+    } catch {
+      wikiLogDelta = []
+    }
+  }
+
+  const worktrees: Array<{ name: string; path: string; branch: string }> = []
+  const wtRaw = runCmd('git', ['-C', mainRoot, 'worktree', 'list', '--porcelain'], 1500)
+  if (wtRaw.trim()) {
+    let curPath = ''
+    let curBranch = ''
+    for (const ln of `${wtRaw}\n`.split('\n')) {
+      if (ln.startsWith('worktree ')) {
+        curPath = ln.slice('worktree '.length).trim()
+        curBranch = 'HEAD'
+      } else if (ln.startsWith('branch ')) {
+        curBranch = ln.slice('branch '.length).replace(/^refs\/heads\//, '').trim()
+      } else if (!ln.trim() && curPath) {
+        if (curPath !== mainRoot && curPath.includes(`${path.sep}workspace${path.sep}`)) {
+          worktrees.push({
+            name: path.basename(curPath),
+            path: curPath,
+            branch: curBranch,
+          })
+        }
+        curPath = ''
+        curBranch = ''
+      }
+    }
+  }
+
+  const result: LocalWorkspaceContextResult = {
+    session: targetSession,
+    pane_path: sessionPath,
+    repo_root: sessionPath,
+    main_repo_root: mainRoot,
+    branch,
+    wiki_log_delta: wikiLogDelta,
+    brain_files: brainFiles,
+    worktrees,
+  }
+
+  if (!options?.sessionPathOverride) {
+    workspaceContextCache.set(targetSession, { ts: now, data: result })
+  }
+  return result
+}
+
 const LOOPBACK_ORIGIN_RE = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i
 
 /**
@@ -1192,6 +1517,23 @@ export async function handleOfficeBridgeRequest(
   if (pathname === '/api/office/kanban') {
     const session = parsedUrl.searchParams.get('session') || 'aim-office'
     const data = fetchProjectKanbanForSession(session)
+    sendJson(res, 200, data)
+    return true
+  }
+
+  const legacyForensicsMatch = pathname.match(/^\/api\/forensics\/([^/]+)$/)
+  if (pathname === '/api/office/forensics' || legacyForensicsMatch) {
+    const session = legacyForensicsMatch
+      ? decodeURIComponent(legacyForensicsMatch[1])
+      : parsedUrl.searchParams.get('session') || 'aim-office'
+    const data = fetchSessionForensicsLocal(session)
+    sendJson(res, 200, data)
+    return true
+  }
+
+  if (pathname === '/api/office/workspace' || pathname === '/api/workspace/context') {
+    const session = parsedUrl.searchParams.get('session') || 'aim-office'
+    const data = fetchWorkspaceContextLocal(session)
     sendJson(res, 200, data)
     return true
   }
