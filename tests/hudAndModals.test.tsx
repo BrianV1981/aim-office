@@ -8,8 +8,10 @@ import {
   buildFullStaffRosterCharacters,
   SOVEREIGN_STAFF_DIRECTORY,
 } from '../src/components/AgentStaffRoster'
-import { WallTaskBoard } from '../src/components/WallTaskBoard'
-import { WhiteboardModal } from '../src/components/WhiteboardModal'
+import {
+  WallTaskBoard,
+} from '../src/components/WallTaskBoard'
+import { DEFAULT_PHASE1_KANBAN_TICKETS, WhiteboardModal } from '../src/components/WhiteboardModal'
 import { COMMAND_OFFICE_ROOM } from '../src/office/rooms'
 import { resolveMappedProjectNumber } from '../src/server/officeBridge'
 import {
@@ -162,6 +164,19 @@ describe('AIM-Office HUD Command Bar, Forensic Inspector Drawer & Kanban Modal (
     expect(screen.getByTestId('kanban-col-in-progress')).toHaveTextContent('#52')
     expect(screen.getByTestId('kanban-col-todo')).toHaveTextContent('#53')
     expect(screen.getByTestId('swarm-activity-feed')).toHaveTextContent('aim-joshua')
+    expect(screen.getByTestId('swarm-activity-feed')).toHaveTextContent(
+      'Recent A-Mail (`amail` / `aim-mail`) Swarm Dispatches'
+    )
+    expect(screen.getByTestId('whiteboard-modal')).toHaveTextContent(
+      'A-Mail (`amail` / `aim-mail`) Dispatches'
+    )
+    expect(screen.getByTestId('whiteboard-modal').textContent).not.toContain('aim-communicate')
+    expect(
+      DEFAULT_PHASE1_KANBAN_TICKETS.some((t) => t.title.includes('A-Mail (amail)'))
+    ).toBe(true)
+    expect(
+      DEFAULT_PHASE1_KANBAN_TICKETS.some((t) => t.title.includes('aim-communicate'))
+    ).toBe(false)
 
     // Simulate clicking aim-joshua -> WallTaskBoard & WhiteboardModal update to Project #7
     rerender(

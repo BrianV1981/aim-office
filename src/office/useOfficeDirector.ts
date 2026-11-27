@@ -199,7 +199,7 @@ export function mapFleetToOfficeCharacters(
 }
 
 /**
- * Trigger a physical `aim-communicate` Courier Walk from `dispatch.sender` to `dispatch.recipient`
+ * Trigger a physical A-Mail (`amail` / `aim-mail`) Courier Walk from `dispatch.sender` to `dispatch.recipient`
  * (defaulting to `aim-joshua`'s Boss Desk if the recipient is not on the floor) and back to the sender's desk.
  */
 export function applyCourierDispatchToCharacters(

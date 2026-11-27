@@ -1623,7 +1623,7 @@ body {
   font-size: 11px;
 }
 
-/* Live Tmux Last Response, TTS, Direct Reply, Mic STT, Macro Pills & AIM-Communicate Broker (#6 & #7) */
+/* Legacy Inspector Controls & A-Mail Dispatch Broker Styles (#6, #7, #33) */
 .inspector-last-response-box {
   margin: 8px 0 0;
   padding: 8px 10px;

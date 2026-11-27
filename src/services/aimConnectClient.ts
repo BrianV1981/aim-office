@@ -29,6 +29,8 @@ export interface SwarmDispatchEvent {
   mtime: number
   preview: string
   content?: string
+  threadId?: string
+  subject?: string
 }
 
 export interface ForensicToolCall {
@@ -362,6 +364,109 @@ export function parseFleetPanesResponse(raw: unknown): FleetPaneRecord[] {
   return records
 }
 
+function parseSwarmEpochSeconds(item: Record<string, unknown>, fallbackSec: number): number {
+  if (typeof item.mtime === 'number' && Number.isFinite(item.mtime)) {
+    return item.mtime
+  }
+  const tsCandidate = item.created_at ?? item.createdAt ?? item.timestamp
+  if (typeof tsCandidate === 'string' && tsCandidate.trim()) {
+    const parsedMs = Date.parse(tsCandidate)
+    if (Number.isFinite(parsedMs)) {
+      return Math.floor(parsedMs / 1000)
+    }
+  }
+  if (typeof tsCandidate === 'number' && Number.isFinite(tsCandidate)) {
+    return tsCandidate > 1e12 ? Math.floor(tsCandidate / 1000) : tsCandidate
+  }
+  return fallbackSec
+}
+
+function buildSwarmDispatchPreview(item: Record<string, unknown>): string {
+  if (typeof item.preview === 'string' && item.preview.trim()) {
+    return item.preview.trim()
+  }
+  const subject = typeof item.subject === 'string' ? item.subject.trim() : ''
+  const rawBody =
+    typeof item.body === 'string'
+      ? item.body
+      : typeof item.summary === 'string'
+        ? item.summary
+        : typeof item.content === 'string'
+          ? item.content
+          : ''
+  const firstBodyLine =
+    rawBody
+      .split('\n')
+      .map((ln) => ln.trim())
+      .find(Boolean) || ''
+
+  if (subject && firstBodyLine) {
+    return firstBodyLine.startsWith(subject) ? firstBodyLine : `${subject} — ${firstBodyLine}`
+  }
+  if (subject) return subject
+  if (firstBodyLine) return firstBodyLine
+  return 'A-Mail inter-agent dispatch'
+}
+
+/**
+ * Normalize both legacy `/api/swarm/activity` `{ dispatches: [...] }` payloads and
+ * A-Mail (`amail` / `aim-mail`) `{ messages | envelopes | activity | dispatches: [...] }`
+ * envelope schemas into `SwarmDispatchEvent[]` without UI regression (#33).
+ */
+export function parseSwarmActivityResponse(raw: unknown): SwarmDispatchEvent[] | null {
+  if (!raw || typeof raw !== 'object') return null
+  const obj = raw as Record<string, unknown>
+  const list = Array.isArray(obj.dispatches)
+    ? obj.dispatches
+    : Array.isArray(obj.messages)
+      ? obj.messages
+      : Array.isArray(obj.envelopes)
+        ? obj.envelopes
+        : Array.isArray(obj.activity)
+          ? obj.activity
+          : null
+  if (!list) return null
+
+  const fallbackSec = Date.now() / 1000
+  return list
+    .filter((entry): entry is Record<string, unknown> => Boolean(entry && typeof entry === 'object'))
+    .map((d, idx) => {
+      const id = String(d.id ?? d.message_id ?? d.path ?? d.filename ?? `dispatch-${idx}`)
+      const sender = String(d.sender ?? d.from ?? 'aim-joshua')
+      const recipient = String(d.recipient ?? d.to ?? 'aim-office')
+      const replyTo = String(d.reply_to ?? d.replyTo ?? sender)
+      const filename = String(
+        d.filename ?? (typeof d.id === 'string' && d.id ? `${d.id}.json` : 'DISPATCH.md')
+      )
+      const content =
+        typeof d.content === 'string'
+          ? d.content
+          : typeof d.body === 'string'
+            ? d.body
+            : undefined
+      const threadId =
+        typeof d.thread_id === 'string'
+          ? d.thread_id
+          : typeof d.threadId === 'string'
+            ? d.threadId
+            : undefined
+      const subject = typeof d.subject === 'string' ? d.subject : undefined
+
+      return {
+        id,
+        filename,
+        sender,
+        recipient,
+        replyTo,
+        mtime: parseSwarmEpochSeconds(d, fallbackSec),
+        preview: buildSwarmDispatchPreview(d),
+        ...(content !== undefined ? { content } : {}),
+        ...(threadId !== undefined ? { threadId } : {}),
+        ...(subject !== undefined ? { subject } : {}),
+      }
+    })
+}
+
 export class AimConnectClient {
   private readonly baseUrl: string
   private readonly apiToken?: string
@@ -420,20 +525,12 @@ export class AimConnectClient {
       if (!resp.ok) {
         return DEMO_SWARM_DISPATCHES
       }
-      const json = (await resp.json()) as { dispatches?: Array<Record<string, unknown>> }
-      if (!Array.isArray(json.dispatches)) {
+      const json: unknown = await resp.json()
+      const parsed = parseSwarmActivityResponse(json)
+      if (!parsed) {
         return DEMO_SWARM_DISPATCHES
       }
-      return json.dispatches.map((d, idx) => ({
-        id: String(d.id ?? d.path ?? `dispatch-${idx}`),
-        filename: String(d.filename ?? 'DISPATCH.md'),
-        sender: String(d.sender ?? 'aim-joshua'),
-        recipient: String(d.recipient ?? 'aim-office'),
-        replyTo: String(d.reply_to ?? d.sender ?? 'aim-joshua'),
-        mtime: Number(d.mtime ?? Date.now() / 1000),
-        preview: String(d.preview ?? 'Inter-agent dispatch'),
-        content: typeof d.content === 'string' ? d.content : undefined,
-      }))
+      return parsed
     } catch {
       return DEMO_SWARM_DISPATCHES
     }
@@ -544,7 +641,7 @@ export class AimConnectClient {
         {
           id: 'ticket-7',
           number: 7,
-          title: 'feat(communicate): 1-click aim-communicate broker dropdown on agent cards with physical courier walks',
+          title: 'feat(amail): A-Mail (amail / aim-mail) swarm dispatch feed with physical courier walks',
           status: 'Todo',
           assignee: 'aim-office',
         },

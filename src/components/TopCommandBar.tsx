@@ -205,7 +205,7 @@ export const TopCommandBar: React.FC<TopCommandBarProps> = ({
           className="hud-btn btn-courier"
           data-testid="btn-trigger-courier"
           onClick={onTriggerCourierDemo}
-          title="Dispatch Courier Relay to J.O.S.H.U.A. Command"
+          title="Preview A-Mail (amail) Courier Walk to J.O.S.H.U.A. Command"
         >
           📡 RELAY DISPATCH
         </button>

@@ -366,6 +366,7 @@ export const AgentInspectorDrawer: React.FC<AgentInspectorDrawerProps> = ({
             type="button"
             className="btn-secondary-courier"
             data-testid="btn-preview-courier-walk"
+            title="Preview A-Mail (amail) Courier Walk to J.O.S.H.U.A."
             onClick={() => onDispatchCourierFromAgent(character)}
           >
             📨 Preview Visual Walk to J.O.S.H.U.A.

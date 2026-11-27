@@ -5,8 +5,10 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   AimConnectClient,
   DEMO_FLEET_PANES,
+  defaultAimConnectClient,
   formatTokenCountCompact,
   parseFleetPanesResponse,
+  parseSwarmActivityResponse,
 } from '../src/services/aimConnectClient'
 import {
   createOfficeBridgePlugin,
@@ -17,6 +19,7 @@ import {
   fetchWorkspaceContextLocal,
   handleOfficeBridgeRequest,
   isAllowedLocalReadRequest,
+  normalizeSwarmActivityPayload,
   parseHandoffKanbanForSession,
   parsePaneScrollbackTelemetry,
   resolveAimLoopbackToken,
@@ -550,5 +553,67 @@ describe('AIM-Connect Fleet Telemetry Bridge & Office Director (#2 & #5)', () =>
     expect(auditorDemo.repoName).toBe('aim-auditor')
 
     fs.rmSync(tmpDir, { recursive: true, force: true })
+  })
+
+  it('normalizes both legacy /api/swarm/activity dispatches and A-Mail (amail / aim-mail) envelopes without UI regression (#33)', async () => {
+    const amailPayload = {
+      agent: 'aim-office',
+      state: 'all',
+      count: 1,
+      messages: [
+        {
+          id: '20261127T164157Z_9b611330',
+          thread_id: 'thr_cc033e9abe48',
+          from: 'aim-auditor',
+          to: 'aim-office',
+          reply_to: 'aim-auditor',
+          subject: 'Issue #33 A-Mail Rollout',
+          body: '[DISPATCH] Relabel courier UI and consume A-Mail feed.\nSecond line details.',
+          created_at: '2026-11-27T16:41:57Z',
+        },
+      ],
+    }
+
+    const clientEvents = parseSwarmActivityResponse(amailPayload)
+    expect(clientEvents).not.toBeNull()
+    expect(clientEvents).toHaveLength(1)
+    expect(clientEvents![0]).toMatchObject({
+      id: '20261127T164157Z_9b611330',
+      filename: '20261127T164157Z_9b611330.json',
+      sender: 'aim-auditor',
+      recipient: 'aim-office',
+      replyTo: 'aim-auditor',
+      mtime: Math.floor(Date.parse('2026-11-27T16:41:57Z') / 1000),
+      preview:
+        'Issue #33 A-Mail Rollout — [DISPATCH] Relabel courier UI and consume A-Mail feed.',
+      threadId: 'thr_cc033e9abe48',
+      subject: 'Issue #33 A-Mail Rollout',
+    })
+
+    const bridgeRecords = normalizeSwarmActivityPayload(amailPayload)
+    expect(bridgeRecords).toHaveLength(1)
+    expect(bridgeRecords[0]).toMatchObject({
+      id: '20261127T164157Z_9b611330',
+      sender: 'aim-auditor',
+      recipient: 'aim-office',
+      reply_to: 'aim-auditor',
+      thread_id: 'thr_cc033e9abe48',
+      subject: 'Issue #33 A-Mail Rollout',
+    })
+
+    // Courier walk animation works identically with normalized A-Mail envelope events
+    const characters = mapFleetToOfficeCharacters(DEMO_FLEET_PANES)
+    const walked = applyCourierDispatchToCharacters(characters, clientEvents![0])
+    const auditorCourier = walked.find((c) => c.sessionName === 'aim-auditor')!
+    expect(auditorCourier.status).toBe('COURIER')
+    expect(auditorCourier.courierTargetSession).toBe('aim-office')
+    expect(auditorCourier.targetWaypoints.length).toBeGreaterThan(2)
+
+    // Demo Kanban fallback for aim-office uses A-Mail copy with zero legacy aim-communicate labels
+    const officeKanban = await defaultAimConnectClient.fetchSessionKanban('aim-office', true)
+    expect(officeKanban.tickets.some((t) => t.title.includes('A-Mail (amail / aim-mail)'))).toBe(
+      true
+    )
+    expect(officeKanban.tickets.some((t) => t.title.includes('aim-communicate'))).toBe(false)
   })
 })

@@ -644,6 +644,8 @@ export interface LocalSwarmDispatchRecord {
   reply_to: string
   mtime: number
   preview: string
+  thread_id?: string
+  subject?: string
 }
 
 let loopbackTokenCache: { ts: number; path: string; token: string } | null = null
@@ -1098,6 +1100,94 @@ export function fetchProjectKanbanForSession(sessionName: string): {
   return result
 }
 
+export function normalizeSwarmActivityPayload(
+  raw: unknown,
+  nowMs = Date.now()
+): LocalSwarmDispatchRecord[] {
+  if (!raw || typeof raw !== 'object') return []
+  const obj = raw as Record<string, unknown>
+  const rawList = Array.isArray(obj.dispatches)
+    ? obj.dispatches
+    : Array.isArray(obj.messages)
+      ? obj.messages
+      : Array.isArray(obj.envelopes)
+        ? obj.envelopes
+        : Array.isArray(obj.activity)
+          ? obj.activity
+          : []
+
+  const fallbackSec = Math.floor(nowMs / 1000)
+  return rawList
+    .filter((entry): entry is Record<string, unknown> => Boolean(entry && typeof entry === 'object'))
+    .slice(0, 30)
+    .map((d, idx) => {
+      const id = String(d.id ?? d.message_id ?? d.filename ?? `dispatch-${idx}`)
+      const sender = String(d.sender ?? d.from ?? 'aim-joshua')
+      const recipient = String(d.recipient ?? d.to ?? 'aim-office')
+      const replyTo = String(d.reply_to ?? d.replyTo ?? sender)
+      const filename = String(
+        d.filename ?? (typeof d.id === 'string' && d.id ? `${d.id}.json` : 'DISPATCH.md')
+      )
+
+      let mtime = fallbackSec
+      if (typeof d.mtime === 'number' && Number.isFinite(d.mtime)) {
+        mtime = d.mtime
+      } else {
+        const tsCandidate = d.created_at ?? d.createdAt ?? d.timestamp
+        if (typeof tsCandidate === 'string' && tsCandidate.trim()) {
+          const parsedMs = Date.parse(tsCandidate)
+          if (Number.isFinite(parsedMs)) {
+            mtime = Math.floor(parsedMs / 1000)
+          }
+        } else if (typeof tsCandidate === 'number' && Number.isFinite(tsCandidate)) {
+          mtime = tsCandidate > 1e12 ? Math.floor(tsCandidate / 1000) : tsCandidate
+        }
+      }
+
+      const subject = typeof d.subject === 'string' ? d.subject.trim() : ''
+      const rawBody =
+        typeof d.body === 'string'
+          ? d.body
+          : typeof d.summary === 'string'
+            ? d.summary
+            : typeof d.content === 'string'
+              ? d.content
+              : ''
+      const firstBodyLine =
+        rawBody
+          .split('\n')
+          .map((ln) => ln.trim())
+          .find(Boolean) || ''
+      const resolvedPreview =
+        typeof d.preview === 'string' && d.preview.trim()
+          ? d.preview.trim()
+          : subject && firstBodyLine
+            ? firstBodyLine.startsWith(subject)
+              ? firstBodyLine
+              : `${subject} — ${firstBodyLine}`
+            : subject || firstBodyLine || 'A-Mail inter-agent dispatch'
+
+      const threadId =
+        typeof d.thread_id === 'string'
+          ? d.thread_id
+          : typeof d.threadId === 'string'
+            ? d.threadId
+            : undefined
+
+      return {
+        id,
+        filename,
+        sender,
+        recipient,
+        reply_to: replyTo,
+        mtime,
+        preview: resolvedPreview.slice(0, 140),
+        ...(threadId !== undefined ? { thread_id: threadId } : {}),
+        ...(subject ? { subject } : {}),
+      }
+    })
+}
+
 export async function fetchSwarmActivityFromAimConnect(
   baseUrl = process.env.VITE_AIM_CONNECT_URL || 'http://127.0.0.1:8000',
   bypassCache = false,
@@ -1119,17 +1209,8 @@ export async function fetchSwarmActivityFromAimConnect(
       signal: AbortSignal.timeout(1500),
     })
     if (resp.ok) {
-      const json = (await resp.json()) as { dispatches?: Array<Record<string, unknown>> }
-      const rawList = Array.isArray(json?.dispatches) ? json.dispatches : []
-      const mapped: LocalSwarmDispatchRecord[] = rawList.slice(0, 30).map((d, idx) => ({
-        id: String(d.id ?? d.filename ?? `dispatch-${idx}`),
-        filename: String(d.filename ?? 'DISPATCH.md'),
-        sender: String(d.sender ?? 'aim-joshua'),
-        recipient: String(d.recipient ?? 'aim-office'),
-        reply_to: String(d.reply_to ?? d.sender ?? 'aim-joshua'),
-        mtime: Number(d.mtime ?? Math.floor(now / 1000)),
-        preview: String(d.preview ?? 'Inter-agent dispatch').slice(0, 140),
-      }))
+      const json: unknown = await resp.json()
+      const mapped = normalizeSwarmActivityPayload(json, now)
       aimConnectSwarmCache = { ts: now, data: mapped }
       return mapped
     }

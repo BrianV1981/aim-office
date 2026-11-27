@@ -29,7 +29,7 @@ export const DEFAULT_PHASE1_KANBAN_TICKETS: KanbanTicketItem[] = [
   {
     id: 'ticket-2',
     number: 2,
-    title: 'feat(telemetry): live aim-connect fleet bridge, vessel archetype mapper & aim-communicate courier walks',
+    title: 'feat(telemetry): live aim-connect fleet bridge, vessel archetype mapper & A-Mail (amail) courier walks',
     status: 'Done',
     assignee: 'aim-office',
   },
@@ -91,7 +91,7 @@ export const WhiteboardModal: React.FC<WhiteboardModalProps> = ({
               📋 {boardLabel} Kanban Board & Swarm Feed
             </h2>
             <p className="whiteboard-subtitle">
-              Live GitOps Worktree Status (`./aim projects board`) & `aim-communicate` Dispatches
+              Live GitOps Worktree Status (`./aim projects board`) & A-Mail (`amail` / `aim-mail`) Dispatches
             </p>
           </div>
           <button
@@ -139,9 +139,9 @@ export const WhiteboardModal: React.FC<WhiteboardModalProps> = ({
             })}
           </div>
 
-          {/* Live aim-communicate Swarm Activity Feed */}
+          {/* Live A-Mail (amail / aim-mail) Swarm Activity Feed */}
           <div className="swarm-activity-section" data-testid="swarm-activity-feed">
-            <h3>📨 Recent `aim-communicate` Swarm Dispatches</h3>
+            <h3>📨 Recent A-Mail (`amail` / `aim-mail`) Swarm Dispatches</h3>
             <div className="swarm-dispatch-list">
               {swarmDispatches.map((d) => (
                 <div key={d.id} className="swarm-dispatch-row">
